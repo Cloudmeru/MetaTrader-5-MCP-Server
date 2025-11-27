@@ -1,4 +1,4 @@
-# MetaTrader5 MCP Server
+# MetaTrader 5 MCP Server
 
 MetaTrader 5 integration for Model Context Protocol (MCP). Provides read-only access to MT5 market data through Python commands.
 
