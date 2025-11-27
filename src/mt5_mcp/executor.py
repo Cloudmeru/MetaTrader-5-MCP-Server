@@ -1,0 +1,130 @@
+"""
+Command executor for MT5 MCP server.
+Executes Python commands in a restricted namespace and formats results.
+"""
+import io
+import sys
+import traceback
+import logging
+from typing import Any, Dict
+import pandas as pd
+import json
+
+logger = logging.getLogger(__name__)
+
+
+def format_result(result: Any) -> str:
+    """
+    Format execution result for nice display.
+    
+    Args:
+        result: The result to format
+        
+    Returns:
+        Formatted string representation
+    """
+    if result is None:
+        return ""
+    
+    # Handle pandas DataFrames
+    if isinstance(result, pd.DataFrame):
+        if result.empty:
+            return "Empty DataFrame"
+        return result.to_markdown(index=True)
+    
+    # Handle pandas Series
+    if isinstance(result, pd.Series):
+        if result.empty:
+            return "Empty Series"
+        return result.to_markdown()
+    
+    # Handle dictionaries
+    if isinstance(result, dict):
+        return json.dumps(result, indent=2, default=str)
+    
+    # Handle lists and tuples
+    if isinstance(result, (list, tuple)):
+        if len(result) == 0:
+            return "[]" if isinstance(result, list) else "()"
+        # If list of dicts, try to format as table
+        if all(isinstance(item, dict) for item in result):
+            try:
+                df = pd.DataFrame(result)
+                return df.to_markdown(index=False)
+            except:
+                pass
+        return json.dumps(result, indent=2, default=str)
+    
+    # Handle MT5 NamedTuples and similar objects
+    if hasattr(result, '_asdict'):
+        return json.dumps(result._asdict(), indent=2, default=str)
+    
+    # Default: convert to string
+    return str(result)
+
+
+def execute_command(command: str, namespace: Dict[str, Any], show_traceback: bool = True) -> str:
+    """
+    Execute Python command in restricted namespace and return formatted result.
+    
+    Args:
+        command: Python code to execute (single or multi-line)
+        namespace: Restricted namespace containing available functions/modules
+        show_traceback: Whether to include full traceback on errors
+        
+    Returns:
+        Formatted result string or error message
+    """
+    logger.info(f"Executing command: {command[:100]}...")
+    
+    # Capture stdout
+    old_stdout = sys.stdout
+    sys.stdout = captured_output = io.StringIO()
+    
+    result = None
+    error = None
+    
+    try:
+        # Try to evaluate as expression first (for single-line expressions)
+        try:
+            result = eval(command, namespace)
+        except SyntaxError:
+            # If eval fails, execute as statement(s)
+            exec(command, namespace)
+            # Check if any variable was assigned that we should return
+            # Look for common result variable names
+            for var_name in ['result', 'data', 'output', 'res']:
+                if var_name in namespace and not var_name.startswith('_'):
+                    result = namespace[var_name]
+                    break
+    except Exception as e:
+        error = e
+        logger.error(f"Command execution failed: {str(e)}", exc_info=True)
+    finally:
+        # Restore stdout
+        sys.stdout = old_stdout
+        output = captured_output.getvalue()
+    
+    # Build response
+    if error:
+        if show_traceback:
+            tb = traceback.format_exc()
+            return f"Error executing command:\n\n{tb}"
+        else:
+            return f"Error: {type(error).__name__}: {str(error)}"
+    
+    # Combine output and result
+    response_parts = []
+    
+    if output.strip():
+        response_parts.append(output.strip())
+    
+    if result is not None:
+        formatted_result = format_result(result)
+        if formatted_result:
+            response_parts.append(formatted_result)
+    
+    if not response_parts:
+        return "Command executed successfully (no output)"
+    
+    return "\n\n".join(response_parts)
