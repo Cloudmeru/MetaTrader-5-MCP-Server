@@ -2,6 +2,36 @@
 
 MetaTrader 5 integration for Model Context Protocol (MCP). Provides read-only access to MT5 market data through Python commands.
 
+## ⚡ What's New in v0.4.0
+
+### 🔮 Prophet Time Series Forecasting
+Predict future price movements based on historical data with confidence intervals.
+
+### 🤖 XGBoost ML Trading Signals (NEW!)
+Get buy/sell signal predictions with confidence scores using machine learning.
+
+```json
+{
+  "query": {"operation": "copy_rates_from_pos", "symbol": "BTCUSD", "parameters": {"timeframe": "H1", "count": 168}},
+  "indicators": [
+    {"function": "ta.momentum.rsi", "params": {"window": 14}},
+    {"function": "ta.trend.sma_indicator", "params": {"window": 24}}
+  ],
+  "forecast": {
+    "periods": 24,
+    "freq": "h",
+    "enable_ml_prediction": true,
+    "ml_lookback": 100,
+    "plot": true
+  }
+}
+```
+
+**📖 Documentation:**
+- **[QUICK_START_v0.4.0.md](QUICK_START_v0.4.0.md)** - Quick start guide with examples
+- **[FORECAST_EXAMPLES.md](FORECAST_EXAMPLES.md)** - Comprehensive Prophet forecasting guide
+- **[docs/XGBOOST_ML_SIGNAL.md](docs/XGBOOST_ML_SIGNAL.md)** - XGBoost ML signal documentation (NEW!)
+
 ## Prerequisites
 
 - **Windows OS** (MetaTrader5 library is Windows-only)
@@ -25,7 +55,10 @@ This will install all required dependencies:
 - `mcp` - Model Context Protocol SDK
 - `MetaTrader5` - Official MT5 Python library
 - `pandas` - Data manipulation and formatting
-- `tabulate` - Table formatting for markdown output
+- `prophet` - Time series forecasting
+- `xgboost` - Machine learning for trading signals (NEW!)
+- `scikit-learn` - ML utilities and preprocessing (NEW!)
+- `ta` - Technical analysis indicators
 
 ## Configuration
 

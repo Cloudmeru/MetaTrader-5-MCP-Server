@@ -1,0 +1,46 @@
+[MAIN]
+max-line-length=100
+disable=
+    # Complexity warnings - reasonable for trading/analysis code
+    too-many-branches,
+    too-many-return-statements,
+    too-many-nested-blocks,
+    too-many-lines,
+    too-many-positional-arguments,
+    # MetaTrader5 dynamic module warnings
+    no-member,
+    # Design patterns
+    too-few-public-methods,
+    # Import order (handled by ruff/isort)
+    wrong-import-order,
+    # Code duplication (acceptable for small helper functions)
+    duplicate-code,
+    # Docstring requirements (can be added incrementally)
+    missing-class-docstring,
+    # Global statement (necessary for singleton connection)
+    global-statement,
+    # Protected access (necessary for cache management)
+    protected-access,
+    # Broad exception clauses (disabled by flag)
+    broad-exception-caught,
+    broad-exception-raised,
+    # Import location (C0415 - disabled for lazy loading)
+    import-outside-toplevel,
+    # Logging
+    logging-fstring-interpolation
+
+[FORMAT]
+max-line-length=100
+
+[DESIGN]
+max-attributes=10
+max-locals=20
+max-args=8
+
+[MESSAGES CONTROL]
+enable=
+    useless-suppression,
+    deprecated-pragma
+
+[REPORTS]
+output-format=colorized
