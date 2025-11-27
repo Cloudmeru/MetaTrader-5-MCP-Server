@@ -28,9 +28,57 @@ Get buy/sell signal predictions with confidence scores using machine learning.
 ```
 
 **📖 Documentation:**
-- **[QUICK_START_v0.4.0.md](QUICK_START_v0.4.0.md)** - Quick start guide with examples
-- **[FORECAST_EXAMPLES.md](FORECAST_EXAMPLES.md)** - Comprehensive Prophet forecasting guide
-- **[docs/XGBOOST_ML_SIGNAL.md](docs/XGBOOST_ML_SIGNAL.md)** - XGBoost ML signal documentation (NEW!)
+- **[USAGE.md](USAGE.md)** - Comprehensive instructions, tool reference, and troubleshooting
+- **[CHANGELOG.md](CHANGELOG.md)** - Release history and migration notes
+
+## Key Capabilities
+
+- **Read-only MT5 bridge** – Safe namespace exposes only data-retrieval APIs and blocks all trading calls.
+- **Multiple interaction models** – Write Python (`execute_mt5`), submit structured MT5 queries (`mt5_query`), or run full analyses with indicators, charts, and forecasts (`mt5_analyze`).
+- **Technical analysis toolkit** – `ta`, `numpy`, and `matplotlib` ship in the namespace for RSI, MACD, Bollinger Bands, multi-panel charts, and more.
+- **Forecasting + ML signals** – Prophet forecasting and optional XGBoost buy/sell predictions with confidence scoring.
+- **LLM-friendly guardrails** – Clear tool descriptions, runtime validation, and result-assignment reminders keep assistant output predictable.
+
+## Available Tools
+
+### `execute_mt5`
+Free-form Python execution inside a curated namespace. Ideal for quick calculations, prototyping, and bespoke formatting.
+
+```python
+rates = mt5.copy_rates_from_pos('BTCUSD', mt5.TIMEFRAME_H1, 0, 100)
+df = pd.DataFrame(rates)
+df['RSI'] = ta.momentum.rsi(df['close'], window=14)
+result = df[['time', 'close', 'RSI']].tail(10)
+```
+
+### `mt5_query`
+Structured JSON interface that maps directly to MT5 read-only operations with automatic validation, timeframe conversion, and friendly error messages.
+
+```json
+{
+  "operation": "copy_rates_from_pos",
+  "symbol": "BTCUSD",
+  "parameters": {"timeframe": "H1", "count": 100}
+}
+```
+
+### `mt5_analyze`
+Pipeline tool that chains a query → optional indicators → charts and/or Prophet forecasts (with optional ML signals) in one request.
+
+```json
+{
+  "query": {
+    "operation": "copy_rates_from_pos",
+    "symbol": "BTCUSD",
+    "parameters": {"timeframe": "D1", "count": 180}
+  },
+  "indicators": [
+    {"function": "ta.trend.sma_indicator", "params": {"window": 50}},
+    {"function": "ta.momentum.rsi", "params": {"window": 14}}
+  ],
+  "forecast": {"periods": 30, "plot": true, "enable_ml_prediction": true}
+}
+```
 
 ## Prerequisites
 
@@ -92,98 +140,33 @@ Add to your Claude Desktop configuration file:
 }
 ```
 
-## Usage
+## Usage Overview
 
-The server provides a single tool: `execute_mt5`
-
-### Available Objects
-
-- `mt5` - MetaTrader5 module with read-only functions
-- `datetime` - Python datetime module
-- `pd` - pandas module (as `pd`)
-
-### Example Queries
-
-#### Get symbol information
-```python
-mt5.symbol_info('EURUSD')._asdict()
-```
-
-#### Get last week's BTCUSD daily data
-```python
-mt5.copy_rates_from_pos('BTCUSD', mt5.TIMEFRAME_D1, 0, 7)
-```
-
-#### Get last week's hourly data as DataFrame
-```python
-rates = mt5.copy_rates_from_pos('BTCUSD', mt5.TIMEFRAME_H1, 0, 168)
-pd.DataFrame(rates)
-```
-
-#### List all available symbols
-```python
-symbols = mt5.symbols_get()
-[s.name for s in symbols]
-```
-
-#### Get account information
-```python
-mt5.account_info()._asdict()
-```
-
-#### Get terminal information
-```python
-mt5.terminal_info()._asdict()
-```
-
-### Multi-line Commands
-
-You can execute complex multi-line Python code:
+Refer to **[USAGE.md](USAGE.md)** for a complete walkthrough that covers prerequisites, configuration screens, troubleshooting tips, and in-depth per-tool examples. Below is a quick multi-line example using `execute_mt5`:
 
 ```python
 from datetime import datetime, timedelta
 
-# Get last 30 days of data
 end_date = datetime.now()
 start_date = end_date - timedelta(days=30)
 
 rates = mt5.copy_rates_range('EURUSD', mt5.TIMEFRAME_D1, start_date, end_date)
 df = pd.DataFrame(rates)
 df['time'] = pd.to_datetime(df['time'], unit='s')
-
-# Calculate daily returns
 df['return'] = df['close'].pct_change()
 
 result = df[['time', 'close', 'return']].tail(10)
 ```
 
-**Note:** For multi-line commands, assign your final result to a variable (like `result`, `data`, `output`, or `res`) to have it returned and formatted.
+**Note:** Always assign the final output to `result` (or another variable noted in USAGE.md) so the MCP response can be formatted correctly.
 
-## Available MT5 Functions (Read-Only)
+## Architecture & Compliance
 
-### Market Data
-- `copy_rates()` - Get historical rates
-- `copy_rates_from()` - Get rates from specific date
-- `copy_rates_from_pos()` - Get rates from position
-- `copy_rates_range()` - Get rates in date range
-- `copy_ticks_from()` - Get tick data from specific date
-- `copy_ticks_range()` - Get tick data in date range
-
-### Symbol Information
-- `symbol_info()` - Get symbol properties
-- `symbol_info_tick()` - Get last tick
-- `symbols_get()` - Get all symbols
-- `symbols_total()` - Get symbol count
-
-### Account/Terminal
-- `account_info()` - Get account information
-- `terminal_info()` - Get terminal information
-- `version()` - Get MT5 version
-
-### Timeframe Constants
-- `TIMEFRAME_M1`, `TIMEFRAME_M5`, `TIMEFRAME_M15`, `TIMEFRAME_M30`
-- `TIMEFRAME_H1`, `TIMEFRAME_H4`
-- `TIMEFRAME_D1`, `TIMEFRAME_W1`, `TIMEFRAME_MN1`
+- Built on `mcp.server.lowlevel.Server` with stdio transport for Claude Desktop and other MCP clients.
+- Safe execution namespace exposes vetted objects (`mt5`, `datetime`, `pd`, `ta`, `numpy`, `matplotlib`) while blocking trading calls and disallowed modules.
+- Runtime validation catches `mt5.initialize()` / `mt5.shutdown()` attempts and highlights the correct workflow before execution.
+- Tool descriptions, examples, and parameter docs are synchronized with MCP SDK guidance for predictable LLM behavior.
+- Optional `--log-file` flag streams structured diagnostics for easier debugging and auditing during deployments.
 
 ## Troubleshooting
 
