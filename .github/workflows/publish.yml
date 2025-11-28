@@ -33,11 +33,8 @@ jobs:
           pip install build twine
 
       - name: Clean previous build artifacts
-        run: python - <<'PY'
-import pathlib, shutil
-shutil.rmtree('dist', ignore_errors=True)
-pathlib.Path('dist').mkdir(exist_ok=True)
-PY
+        run: |
+          python -c "import pathlib, shutil; shutil.rmtree('dist', ignore_errors=True); pathlib.Path('dist').mkdir(exist_ok=True)"
 
       - name: Build sdist and wheel
         run: python -m build
