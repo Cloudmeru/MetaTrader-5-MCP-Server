@@ -8,6 +8,32 @@ version = "0.4.0"
 description = "MCP server for MetaTrader 5 with structured inputs and full library access"
 readme = "README.md"
 requires-python = ">=3.10"
+license = "MIT"
+authors = [
+    {name = "Cloudmeru"}
+]
+keywords = [
+    "metatrader",
+    "mt5",
+    "mcp",
+    "trading",
+    "forex",
+    "llm",
+    "ai",
+    "model-context-protocol"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence"
+]
 dependencies = [
     "mcp>=0.9.0",
     "MetaTrader5>=5.0.0",
@@ -20,6 +46,12 @@ dependencies = [
     "xgboost>=2.0.0",
     "scikit-learn>=1.3.0"
 ]
+
+[project.urls]
+Homepage = "https://github.com/Cloudmeru/Metatrader-5-MCP-Server"
+Repository = "https://github.com/Cloudmeru/Metatrader-5-MCP-Server"
+Changelog = "https://github.com/Cloudmeru/Metatrader-5-MCP-Server/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/Cloudmeru/Metatrader-5-MCP-Server/blob/main/USAGE.md"
 
 [project.scripts]
 mt5-mcp = "mt5_mcp.__main__:main"
