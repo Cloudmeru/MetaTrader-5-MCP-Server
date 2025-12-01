@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mt5-mcp"
-version = "0.4.0"
-description = "MCP server for MetaTrader 5 with structured inputs and full library access"
+version = "0.5.0"
+description = "MCP server for MetaTrader 5 with multi-transport support (stdio + HTTP/SSE via Gradio)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -44,7 +44,13 @@ dependencies = [
     "pydantic>=2.0.0",
     "prophet>=1.0.0",
     "xgboost>=2.0.0",
-    "scikit-learn>=1.3.0"
+    "scikit-learn>=1.3.0",
+    "scipy>=1.10.0"
+]
+
+[project.optional-dependencies]
+ui = [
+    "gradio[mcp]>=6.0.0"
 ]
 
 [project.urls]
@@ -55,3 +61,17 @@ Documentation = "https://github.com/Cloudmeru/Metatrader-5-MCP-Server/blob/main/
 
 [project.scripts]
 mt5-mcp = "mt5_mcp.__main__:main"
+mt5-mcp-stdio = "mt5_mcp.__main__:main"
+mt5-mcp-http = "mt5_mcp.gradio_server:launch_gradio_mcp"
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src"]
+
+[tool.ruff.lint]
+ignore = ["E402"]

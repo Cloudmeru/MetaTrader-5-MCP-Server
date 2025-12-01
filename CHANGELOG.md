@@ -2,6 +2,14 @@
 
 All notable changes will be tracked here. Dates reflect when the feature set landed in the repository; see git history for exact commits.
 
+## v0.5.0 – Multi-Transport MCP Server
+
+- Added a Gradio v6-powered MCP server that exposes the same MT5 tools over streamable HTTP/SSE (`/gradio_api/mcp/`) with optional hosting on Hugging Face Spaces or Windows VPS targets.
+- Introduced a dual-transport launcher with `--transport stdio|http|both`, customizable host/port/rate-limit flags, and stdio-only default behavior for backward compatibility.
+- Implemented per-IP HTTP rate limiting (10 req/min by default) plus shared MT5 connection locking to keep the terminal stable under concurrent requests.
+- Documented new workflows in README/USAGE, including MCP client snippets, deployment recipes, and migration guidance from v0.4.x.
+- Cleaned up planning artifacts and unused files in preparation for publishing to `main` and PyPI.
+
 ## v0.4.0 – Forecasting & ML Signals
 
 - Added Prophet forecasting support inside `mt5_analyze`, including `periods`, `freq`, `seasonality_mode`, `growth`, `plot`, and `plot_components` controls.

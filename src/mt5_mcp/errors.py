@@ -43,9 +43,7 @@ class MT5ValidationError(MT5Error):
         corrected_params: Optional[Dict[str, Any]] = None,
         example: Optional[Dict[str, Any]] = None,
     ):
-        super().__init__(
-            message, "VALIDATION_ERROR", suggestion, corrected_params, example
-        )
+        super().__init__(message, "VALIDATION_ERROR", suggestion, corrected_params, example)
 
 
 class MT5SymbolNotFoundError(MT5Error):

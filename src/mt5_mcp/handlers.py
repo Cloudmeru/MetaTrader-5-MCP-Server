@@ -136,53 +136,59 @@ def _prepare_operation_params(request: MT5QueryRequest) -> Dict[str, Any]:
 def _invoke_mt5_operation(
     operation_name: str, mt5_func: Callable[..., Any], params: Dict[str, Any]
 ) -> Any:
-    """Execute the mapped MT5 function with validated parameters."""
+    """Execute the mapped MT5 function with validated parameters and thread safety."""
+    from .connection import safe_mt5_call
 
     logger.info("Executing %s with params: %s", operation_name, params)
 
     try:
         if operation_name == "copy_rates_from_pos":
-            result = mt5_func(
+            result = safe_mt5_call(
+                mt5_func,
                 params.get("symbol"),
                 params.get("timeframe"),
                 params.get("start_pos", 0),
                 params.get("count", 0),
             )
         elif operation_name == "copy_rates_from":
-            result = mt5_func(
+            result = safe_mt5_call(
+                mt5_func,
                 params.get("symbol"),
                 params.get("timeframe"),
                 params.get("date_from"),
                 params.get("count"),
             )
         elif operation_name == "copy_rates_range":
-            result = mt5_func(
+            result = safe_mt5_call(
+                mt5_func,
                 params.get("symbol"),
                 params.get("timeframe"),
                 params.get("date_from"),
                 params.get("date_to"),
             )
         elif operation_name == "copy_ticks_from":
-            result = mt5_func(
+            result = safe_mt5_call(
+                mt5_func,
                 params.get("symbol"),
                 params.get("date_from"),
                 params.get("count"),
                 params.get("flags", mt5.COPY_TICKS_ALL),
             )
         elif operation_name == "copy_ticks_range":
-            result = mt5_func(
+            result = safe_mt5_call(
+                mt5_func,
                 params.get("symbol"),
                 params.get("date_from"),
                 params.get("date_to"),
                 params.get("flags", mt5.COPY_TICKS_ALL),
             )
         elif operation_name in ["symbol_info", "symbol_info_tick"]:
-            result = mt5_func(params.get("symbol"))
+            result = safe_mt5_call(mt5_func, params.get("symbol"))
         elif operation_name == "symbol_select":
-            result = mt5_func(params.get("symbol"), params.get("enable", True))
+            result = safe_mt5_call(mt5_func, params.get("symbol"), params.get("enable", True))
         elif operation_name == "symbols_get":
             group = params.get("group")
-            result = mt5_func(group) if group else mt5_func()
+            result = safe_mt5_call(mt5_func, group) if group else safe_mt5_call(mt5_func)
         elif operation_name in ["order_calc_margin", "order_calc_profit"]:
             extra_args: List[Any] = []
             if "sl" in params:
@@ -190,7 +196,8 @@ def _invoke_mt5_operation(
             if "tp" in params:
                 extra_args.append(params["tp"])
 
-            result = mt5_func(
+            result = safe_mt5_call(
+                mt5_func,
                 params.get("action") or params.get("order_type"),
                 params.get("symbol"),
                 params.get("volume"),
@@ -198,7 +205,7 @@ def _invoke_mt5_operation(
                 *extra_args,
             )
         else:
-            result = mt5_func(**params)
+            result = safe_mt5_call(mt5_func, **params)
     except TypeError as exc:
         raise MT5ValidationError(str(exc)) from exc
     except Exception as exc:  # pragma: no cover - MT5 runtime errors
@@ -209,7 +216,7 @@ def _invoke_mt5_operation(
         ) from exc
 
     if result is None:
-        error_code, error_msg = mt5.last_error()
+        error_code, error_msg = safe_mt5_call(mt5.last_error)
         raise MT5OperationError(
             operation_name,
             f"MT5 returned None. Error code {error_code}: {error_msg}",
@@ -239,7 +246,51 @@ def _convert_result_to_dict(result: Any) -> Any:
 
 
 def handle_mt5_query(request: MT5QueryRequest) -> MT5QueryResponse:
-    """Execute MT5 query operation."""
+    """
+    Query MT5 data with structured parameters.
+
+    This function executes MetaTrader 5 operations for retrieving market data,
+    symbol information, account details, and performing calculations.
+
+    Args:
+        request (MT5QueryRequest): Query request containing operation, symbol, and parameters
+            - operation: MT5 operation name (copy_rates_from_pos, symbol_info, etc.)
+            - symbol: Trading symbol (e.g., BTCUSD, EURUSD) - required for symbol-specific ops
+            - parameters: Operation-specific parameters (e.g., {"timeframe": "H1", "count": 100})
+
+    Returns:
+        MT5QueryResponse: Query results containing:
+            - success: Boolean indicating operation success
+            - data: Query results (list of dicts for rates, dict for info operations)
+            - metadata: Request metadata including symbol and parameters
+            - operation: Operation name that was executed
+
+    Raises:
+        MT5SymbolNotFoundError: Symbol does not exist or is not available
+        MT5ValidationError: Invalid operation parameters or data types
+        MT5OperationError: MT5 operation failed or returned None
+        MT5DataError: MT5 returned unexpected data format
+
+    Examples:
+        Get symbol information:
+        >>> from mt5_mcp.models import MT5QueryRequest, MT5Operation
+        >>> request = MT5QueryRequest(operation=MT5Operation.SYMBOL_INFO, symbol="BTCUSD")
+        >>> response = handle_mt5_query(request)
+        >>> print(response.data)
+
+        Get historical rates:
+        >>> request = MT5QueryRequest(
+        ...     operation=MT5Operation.COPY_RATES_FROM_POS,
+        ...     symbol="EURUSD",
+        ...     parameters={"timeframe": "H1", "start_pos": 0, "count": 100}
+        ... )
+        >>> response = handle_mt5_query(request)
+        >>> print(len(response.data))
+
+        Get account information:
+        >>> request = MT5QueryRequest(operation=MT5Operation.ACCOUNT_INFO)
+        >>> response = handle_mt5_query(request)
+    """
 
     operation_name = request.operation.value
     params = _prepare_operation_params(request)
@@ -266,7 +317,42 @@ def handle_mt5_query(request: MT5QueryRequest) -> MT5QueryResponse:
 
 
 def handle_mt5_analysis(request: MT5AnalysisRequest) -> MT5AnalysisResponse:
-    """Execute MT5 analysis workflow (query + indicators + chart + forecast)."""
+    """Run MT5 analysis including indicators, charts, and optional forecasting.
+
+    Args:
+        request (MT5AnalysisRequest): Includes:
+            query: MT5QueryRequest describing the base data retrieval (required).
+            indicators: Optional list of IndicatorSpec objects.
+            chart: Optional ChartConfig for visualization generation.
+            forecast: Optional ForecastConfig for Prophet forecasting.
+            output_format: "markdown", "json", or "chart_only" (default: "markdown").
+            tail: Optional row count limit for textual outputs.
+
+    Returns:
+        MT5AnalysisResponse: Success flag plus data, chart paths, indicators, and metadata.
+
+    Raises:
+        MT5DataError: Query returned no data or unsupported format.
+        MT5CalculationError: Failed to calculate indicators, charts, or forecasts.
+        ValueError: Invalid indicator function or parameters.
+
+    Example:
+        >>> from mt5_mcp.models import (
+        ...     MT5AnalysisRequest,
+        ...     MT5QueryRequest,
+        ...     MT5Operation,
+        ...     IndicatorSpec,
+        ... )
+        >>> request = MT5AnalysisRequest(
+        ...     query=MT5QueryRequest(
+        ...         operation=MT5Operation.COPY_RATES_FROM_POS,
+        ...         symbol="BTCUSD",
+        ...         parameters={"timeframe": "H1", "count": 100},
+        ...     ),
+        ...     indicators=[IndicatorSpec(function="ta.momentum.rsi", params={"window": 14})],
+        ... )
+        >>> handle_mt5_analysis(request)
+    """
 
     logger.info("Execute MT5 analysis: query + indicators + chart + optional forecast")
 
@@ -279,9 +365,7 @@ def handle_mt5_analysis(request: MT5AnalysisRequest) -> MT5AnalysisResponse:
         raise MT5DataError("Unsupported query response format", "Expected list or dict")
 
     if df.empty:
-        raise MT5DataError(
-            "Query returned no data", "Adjust query parameters or timeframe"
-        )
+        raise MT5DataError("Query returned no data", "Adjust query parameters or timeframe")
 
     if "time" in df.columns:
         df["time"] = pd.to_datetime(df["time"], unit="s", errors="coerce")
@@ -351,9 +435,7 @@ def handle_mt5_analysis(request: MT5AnalysisRequest) -> MT5AnalysisResponse:
         else:
             output_data = output_df.to_dict(orient="records")
 
-    analysis_summary = _generate_analysis_summary(
-        df, request.query.symbol, indicators_calculated
-    )
+    analysis_summary = _generate_analysis_summary(df, request.query.symbol, indicators_calculated)
 
     return MT5AnalysisResponse(
         success=True,
@@ -366,9 +448,7 @@ def handle_mt5_analysis(request: MT5AnalysisRequest) -> MT5AnalysisResponse:
             "columns": list(df.columns),
             "symbol": request.query.symbol,
             "timeframe": (
-                request.query.parameters.get("timeframe")
-                if request.query.parameters
-                else None
+                request.query.parameters.get("timeframe") if request.query.parameters else None
             ),
             "analysis_summary": analysis_summary,
             "forecast_summary": forecast_summary,
@@ -431,9 +511,7 @@ def _add_price_action_analysis(df: pd.DataFrame, summary: Dict[str, Any]) -> Non
             "volatility": float(returns.std() * 100),
             "skewness": float(returns.skew()),
             "kurtosis": float(returns.kurtosis()),
-            "sharpe_proxy": (
-                float(returns.mean() / returns.std()) if returns.std() > 0 else 0
-            ),
+            "sharpe_proxy": (float(returns.mean() / returns.std()) if returns.std() > 0 else 0),
         }
 
         if len(returns) >= 8:
@@ -454,17 +532,13 @@ def _add_price_action_analysis(df: pd.DataFrame, summary: Dict[str, Any]) -> Non
 
     trend_direction = "Upward" if slope > 0 else "Downward"
     explanatory_power = f"{r_squared*100:.1f}%"
-    trend_interpretation = (
-        f"{trend_direction} trend with {explanatory_power} explanatory power"
-    )
+    trend_interpretation = f"{trend_direction} trend with {explanatory_power} explanatory power"
 
     summary["pattern_detection"]["trend"] = {
         "slope": float(slope),
         "strength": float(r_squared),
         "direction": "bullish" if slope > 0 else "bearish",
-        "confidence": (
-            "strong" if r_squared > 0.7 else "moderate" if r_squared > 0.4 else "weak"
-        ),
+        "confidence": ("strong" if r_squared > 0.7 else "moderate" if r_squared > 0.4 else "weak"),
         "interpretation": trend_interpretation,
     }
 
@@ -518,9 +592,7 @@ def _add_oscillator_analysis(df: pd.DataFrame, summary: Dict[str, Any]) -> None:
             )
         else:
             percentile = (
-                (current_value - val_min) / (val_max - val_min)
-                if val_max > val_min
-                else 0.5
+                (current_value - val_min) / (val_max - val_min) if val_max > val_min else 0.5
             )
             state = (
                 "extreme_high"
@@ -538,14 +610,10 @@ def _add_oscillator_analysis(df: pd.DataFrame, summary: Dict[str, Any]) -> None:
         )
 
 
-def _add_moving_average_analysis(
-    df: pd.DataFrame, summary: Dict[str, Any]
-) -> List[str]:
+def _add_moving_average_analysis(df: pd.DataFrame, summary: Dict[str, Any]) -> List[str]:
     """Analyze moving average columns for positioning and crossovers."""
 
-    ma_indicators = [
-        col for col in df.columns if any(kw in col.lower() for kw in MA_KEYWORDS)
-    ]
+    ma_indicators = [col for col in df.columns if any(kw in col.lower() for kw in MA_KEYWORDS)]
     if not ma_indicators or "close" not in df.columns:
         return ma_indicators
 
@@ -573,9 +641,7 @@ def _add_moving_average_analysis(
         sorted_mas = sorted(
             ma_indicators,
             key=lambda name: (
-                int("".join(filter(str.isdigit, name)))
-                if any(c.isdigit() for c in name)
-                else 999
+                int("".join(filter(str.isdigit, name))) if any(c.isdigit() for c in name) else 999
             ),
         )
         crossovers = summary["pattern_detection"].setdefault("crossovers", [])
@@ -595,13 +661,10 @@ def _add_moving_average_analysis(
             if not crossover_detected:
                 continue
 
-            cross_type = (
-                "bullish" if fast_vals.iloc[-1] > slow_vals.iloc[-1] else "bearish"
-            )
+            cross_type = "bullish" if fast_vals.iloc[-1] > slow_vals.iloc[-1] else "bearish"
             crossover_direction = "above" if cross_type == "bullish" else "below"
             interpretation = (
-                f"{cross_type.title()} crossover: {fast} crossed "
-                f"{crossover_direction} {slow}"
+                f"{cross_type.title()} crossover: {fast} crossed " f"{crossover_direction} {slow}"
             )
             crossovers.append(
                 {
@@ -619,9 +682,7 @@ def _add_volume_analysis(df: pd.DataFrame, summary: Dict[str, Any]) -> List[str]
     """Capture insights from available volume columns."""
 
     volume_cols = [
-        col
-        for col in df.columns
-        if "volume" in col.lower() and "real" not in col.lower()
+        col for col in df.columns if "volume" in col.lower() and "real" not in col.lower()
     ]
     if not volume_cols:
         return volume_cols
@@ -633,9 +694,7 @@ def _add_volume_analysis(df: pd.DataFrame, summary: Dict[str, Any]) -> List[str]
 
     avg_volume = volumes.mean()
     recent_volume = volumes.iloc[-1]
-    volume_change_pct = (
-        (((recent_volume / avg_volume) - 1) * 100) if avg_volume else 0.0
-    )
+    volume_change_pct = (((recent_volume / avg_volume) - 1) * 100) if avg_volume else 0.0
 
     summary["data_characteristics"]["volume"] = {
         "current": float(recent_volume),
@@ -685,9 +744,7 @@ def _add_band_analysis(df: pd.DataFrame, summary: Dict[str, Any]) -> None:
         )
 
         bands = summary["pattern_detection"].setdefault("bands", [])
-        band_interpretation = (
-            f"Price at {position_pct:.1f}% of {band_name} band range ({state})"
-        )
+        band_interpretation = f"Price at {position_pct:.1f}% of {band_name} band range ({state})"
         bands.append(
             {
                 "type": band_name.title(),
@@ -707,14 +764,11 @@ def _add_custom_indicator_metrics(
 ) -> None:
     """Add summary metrics for columns not covered by other analyses."""
 
-    analyzed_cols = set(
-        ["time", "open", "high", "low", "close"] + volume_cols + ma_indicators
-    )
+    analyzed_cols = set(["time", "open", "high", "low", "close"] + volume_cols + ma_indicators)
     custom_indicators = [
         col
         for col in df.columns
-        if col not in analyzed_cols
-        and not any(kw in col.lower() for kw in OSCILLATOR_KEYWORDS)
+        if col not in analyzed_cols and not any(kw in col.lower() for kw in OSCILLATOR_KEYWORDS)
     ]
 
     for col in custom_indicators:
@@ -743,9 +797,7 @@ def _build_analysis_insights(summary: Dict[str, Any]) -> List[str]:
     if price_data:
         price_change_pct = ((price_data["current"] / price_data["mean"]) - 1) * 100
         if abs(price_change_pct) > 10:
-            insights.append(
-                f"Price deviation: {price_change_pct:+.1f}% from period average"
-            )
+            insights.append(f"Price deviation: {price_change_pct:+.1f}% from period average")
 
     distribution = summary.get("statistical_analysis", {}).get("distribution")
     if distribution and not distribution["is_normal"]:
@@ -778,9 +830,7 @@ def _build_analysis_insights(summary: Dict[str, Any]) -> List[str]:
     return insights
 
 
-def _calculate_indicator(
-    df: pd.DataFrame, spec: IndicatorSpec
-) -> Tuple[pd.DataFrame, str]:
+def _calculate_indicator(df: pd.DataFrame, spec: IndicatorSpec) -> Tuple[pd.DataFrame, str]:
     """Calculate technical indicator and add to DataFrame."""
 
     # Validate TA function
@@ -817,9 +867,7 @@ def _calculate_indicator(
         col_name = spec.column_name
     else:
         # Auto-generate: e.g., "rsi_14"
-        param_str = "_".join(
-            [str(v) for v in params.values() if isinstance(v, (int, float))]
-        )
+        param_str = "_".join([str(v) for v in params.values() if isinstance(v, (int, float))])
         col_name = f"{func_name}_{param_str}" if param_str else func_name
 
     # Add to DataFrame
@@ -828,17 +876,13 @@ def _calculate_indicator(
     return df, col_name
 
 
-def _generate_chart(
-    df: pd.DataFrame, config: ChartConfig, symbol: str, timeframe: str
-) -> str:
+def _generate_chart(df: pd.DataFrame, config: ChartConfig, symbol: str, timeframe: str) -> str:
     """Generate chart and save to file."""
 
     num_panels = len(config.panels)
 
     # Create figure
-    fig, axes = plt.subplots(
-        num_panels, 1, figsize=(config.width, config.height), sharex=True
-    )
+    fig, axes = plt.subplots(num_panels, 1, figsize=(config.width, config.height), sharex=True)
 
     # Handle single panel case
     if num_panels == 1:
@@ -851,9 +895,7 @@ def _generate_chart(
         # Plot columns
         for col in panel.columns:
             if col not in df.columns:
-                raise ValueError(
-                    f"Column '{col}' not found in data. Available: {list(df.columns)}"
-                )
+                raise ValueError(f"Column '{col}' not found in data. Available: {list(df.columns)}")
 
             if panel.style == "line":
                 ax.plot(df.index, df[col], label=col, linewidth=2)
@@ -865,9 +907,7 @@ def _generate_chart(
         # Add reference lines
         if panel.reference_lines:
             for ref_val in panel.reference_lines:
-                ax.axhline(
-                    y=ref_val, color="gray", linestyle="--", alpha=0.5, linewidth=1
-                )
+                ax.axhline(y=ref_val, color="gray", linestyle="--", alpha=0.5, linewidth=1)
 
         # Set y-limits
         if panel.y_limits:
@@ -911,8 +951,7 @@ def _prepare_ml_dataset(
     required_bars = lookback + 10
     if len(df) < required_bars:
         reasoning = (
-            "Insufficient data for ML prediction (need "
-            f"{required_bars} bars, have {len(df)})"
+            "Insufficient data for ML prediction (need " f"{required_bars} bars, have {len(df)})"
         )
         return {"signal": "NEUTRAL", "confidence": 0.0, "reasoning": reasoning}
 
@@ -922,12 +961,8 @@ def _prepare_ml_dataset(
     features_df["close_open_ratio"] = features_df["close"] / features_df["open"]
 
     for window in [5, 10, 20]:
-        features_df[f"return_mean_{window}"] = (
-            features_df["returns"].rolling(window).mean()
-        )
-        features_df[f"return_std_{window}"] = (
-            features_df["returns"].rolling(window).std()
-        )
+        features_df[f"return_mean_{window}"] = features_df["returns"].rolling(window).mean()
+        features_df[f"return_std_{window}"] = features_df["returns"].rolling(window).std()
         features_df[f"volume_mean_{window}"] = (
             features_df["tick_volume"].rolling(window).mean()
             if "tick_volume" in features_df.columns
@@ -936,14 +971,10 @@ def _prepare_ml_dataset(
 
     indicator_cols = []
     for col in features_df.columns:
-        if any(
-            ind in col.lower() for ind in ["rsi", "macd", "sma", "ema", "bb", "atr"]
-        ):
+        if any(ind in col.lower() for ind in ["rsi", "macd", "sma", "ema", "bb", "atr"]):
             indicator_cols.append(col)
 
-    features_df["future_return"] = (
-        features_df["close"].shift(-3) / features_df["close"] - 1
-    )
+    features_df["future_return"] = features_df["close"].shift(-3) / features_df["close"] - 1
     features_df["label"] = (features_df["future_return"] > 0).astype(int)
     features_df = features_df.dropna()
 
@@ -1004,17 +1035,11 @@ def _train_ml_model(
     if buy_confidence > 0.6:
         signal = "BUY"
         confidence = buy_confidence
-        reasoning = (
-            "ML model predicts upward price movement with "
-            f"{confidence:.1%} confidence"
-        )
+        reasoning = "ML model predicts upward price movement with " f"{confidence:.1%} confidence"
     elif sell_confidence > 0.6:
         signal = "SELL"
         confidence = sell_confidence
-        reasoning = (
-            "ML model predicts downward price movement with "
-            f"{confidence:.1%} confidence"
-        )
+        reasoning = "ML model predicts downward price movement with " f"{confidence:.1%} confidence"
     else:
         signal = "NEUTRAL"
         confidence = max(buy_confidence, sell_confidence)
@@ -1024,9 +1049,7 @@ def _train_ml_model(
         )
 
     feature_importance = dict(zip(feature_cols, model.feature_importances_))
-    top_features = sorted(
-        feature_importance.items(), key=lambda item: item[1], reverse=True
-    )[:3]
+    top_features = sorted(feature_importance.items(), key=lambda item: item[1], reverse=True)[:3]
     top_feature_names = [feature for feature, _score in top_features]
     reasoning += f". Key factors: {', '.join(top_feature_names)}"
 
@@ -1083,9 +1106,7 @@ def _generate_forecast(
         raise ValueError("DataFrame must have 'close' column for forecasting")
 
     if len(df) < 10:
-        raise ValueError(
-            f"Insufficient data for forecasting: {len(df)} rows (minimum 10 required)"
-        )
+        raise ValueError(f"Insufficient data for forecasting: {len(df)} rows (minimum 10 required)")
 
     prophet_df = _build_prophet_dataframe(df)
     model = Prophet(
@@ -1107,9 +1128,7 @@ def _generate_forecast(
         include_history=config.include_history,
     )
 
-    logger.info(
-        "Generating %s-period forecast with frequency=%s...", config.periods, freq
-    )
+    logger.info("Generating %s-period forecast with frequency=%s...", config.periods, freq)
     forecast = model.predict(future)
 
     forecast_summary = _summarize_forecast_results(forecast, config, prophet_df, freq)
@@ -1117,12 +1136,8 @@ def _generate_forecast(
     if config.enable_ml_prediction:
         _add_ml_prediction_if_enabled(forecast_summary, df, config)
 
-    chart_path = _maybe_generate_forecast_chart(
-        model, forecast, symbol, timeframe, config
-    )
-    _maybe_generate_components_chart(
-        model, forecast, symbol, timeframe, config, forecast_summary
-    )
+    chart_path = _maybe_generate_forecast_chart(model, forecast, symbol, timeframe, config)
+    _maybe_generate_components_chart(model, forecast, symbol, timeframe, config, forecast_summary)
 
     return forecast_summary, chart_path
 
@@ -1184,9 +1199,7 @@ def _summarize_forecast_results(
         if future_forecast["yhat"].iloc[-1] > future_forecast["yhat"].iloc[0]
         else "bearish"
     )
-    confidence_range = (
-        future_forecast["yhat_upper"] - future_forecast["yhat_lower"]
-    ).mean()
+    confidence_range = (future_forecast["yhat_upper"] - future_forecast["yhat_lower"]).mean()
 
     last_actual = prophet_df["y"].iloc[-1]
     last_forecast = future_forecast["yhat"].iloc[-1]
@@ -1221,13 +1234,9 @@ def _summarize_forecast_results(
             f"Significant {trend_direction} movement expected: {predicted_change_pct:+.2f}%"
         )
     elif abs(predicted_change_pct) < 1:
-        insights.append(
-            f"Price expected to remain relatively stable: {predicted_change_pct:+.2f}%"
-        )
+        insights.append(f"Price expected to remain relatively stable: {predicted_change_pct:+.2f}%")
     else:
-        insights.append(
-            f"Moderate {trend_direction} trend expected: {predicted_change_pct:+.2f}%"
-        )
+        insights.append(f"Moderate {trend_direction} trend expected: {predicted_change_pct:+.2f}%")
 
     if confidence_range / last_actual > 0.1:
         insights.append("High uncertainty in predictions (wide confidence intervals)")
@@ -1243,9 +1252,7 @@ def _add_ml_prediction_if_enabled(
 ) -> None:
     """Append ML trading signal details to forecast summary when requested."""
 
-    logger.info(
-        "Generating XGBoost ML trading signal with lookback=%s...", config.ml_lookback
-    )
+    logger.info("Generating XGBoost ML trading signal with lookback=%s...", config.ml_lookback)
     ml_signal = _generate_ml_signal(df, lookback=config.ml_lookback)
     forecast_summary["ml_trading_signal"] = ml_signal
 

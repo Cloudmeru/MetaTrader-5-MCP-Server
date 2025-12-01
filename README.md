@@ -2,29 +2,23 @@
 
 MetaTrader 5 integration for Model Context Protocol (MCP). Provides read-only access to MT5 market data through Python commands.
 
-## ⚡ What's New in v0.4.0
+## ⚡ What's New in v0.5.0
 
-### 🔮 Prophet Time Series Forecasting
-Predict future price movements based on historical data with confidence intervals.
+- **Dual-transport launcher** – `python -m mt5_mcp` keeps the stdio-only default for desktop clients, while `--transport http` or `--transport both` enables the new streamable HTTP endpoint.
+- **Gradio MCP server** – Install the optional `[ui]` extra to expose `/gradio_api/mcp/` with native MCP schemas, progress updates, and Hugging Face Spaces compatibility.
+- **Built-in rate limiting** – HTTP requests are throttled per IP (10 req/min by default) with CLI overrides and the ability to disable caps for trusted networks.
+- **Thread-safe MT5 access** – Shared connection management and locking prevent concurrent HTTP calls from colliding with stdio traffic.
+- **Documentation refresh** – README/USAGE now cover HTTP setup, MCP client snippets, deployment tips, and migration guidance for v0.5.0.
 
-### 🤖 XGBoost ML Trading Signals (NEW!)
-Get buy/sell signal predictions with confidence scores using machine learning.
+```powershell
+# Default behavior (stdio only, backward compatible)
+python -m mt5_mcp
 
-```json
-{
-  "query": {"operation": "copy_rates_from_pos", "symbol": "BTCUSD", "parameters": {"timeframe": "H1", "count": 168}},
-  "indicators": [
-    {"function": "ta.momentum.rsi", "params": {"window": 14}},
-    {"function": "ta.trend.sma_indicator", "params": {"window": 24}}
-  ],
-  "forecast": {
-    "periods": 24,
-    "freq": "h",
-    "enable_ml_prediction": true,
-    "ml_lookback": 100,
-    "plot": true
-  }
-}
+# Streamable HTTP with rate limiting and a custom port
+python -m mt5_mcp --transport http --host 0.0.0.0 --port 7860 --rate-limit 30
+
+# Dual mode (stdio + HTTP)
+python -m mt5_mcp --transport both
 ```
 
 **📖 Documentation:**
@@ -99,6 +93,14 @@ cd MT5-MCP
 pip install -e .
 ```
 
+Need the HTTP transport? Include the extra Gradio dependency:
+
+```powershell
+pip install -e .[ui]
+# or when installing from PyPI
+pip install "mt5-mcp[ui]"
+```
+
 This will install all required dependencies:
 - `mcp` - Model Context Protocol SDK
 - `MetaTrader5` - Official MT5 Python library
@@ -140,6 +142,44 @@ Add to your Claude Desktop configuration file:
 }
 ```
 
+### Transport Modes (CLI)
+
+Choose how the server exposes MCP transports directly from the command line:
+
+```powershell
+# Default behavior (run only stdio like previous version)
+python -m mt5_mcp
+
+# Run both transports
+python -m mt5_mcp --transport both
+
+# Run only streamable HTTP
+python -m mt5_mcp --transport http --host 0.0.0.0 --port 7860
+```
+
+Additional flags:
+
+- `--rate-limit <value>` – Requests per IP each minute (set to `0` to disable; keep enabled for public servers).
+- `--log-level` / `--log-file` – Tailored diagnostics across transports.
+
+### HTTP MCP Clients
+
+1. Install the optional extras: `pip install mt5-mcp[ui]` (or `pip install -e .[ui]` while developing).
+2. Launch the HTTP transport: `python -m mt5_mcp --transport http --host 0.0.0.0 --port 7860`.
+3. Point any MCP client to the new endpoint:
+
+```json
+{
+  "mcpServers": {
+    "mt5-http": {
+      "url": "http://localhost:7860/gradio_api/mcp/"
+    }
+  }
+}
+```
+
+This endpoint works with MCP Inspector, Claude Desktop (when configured for HTTP), VS Code extensions, or remote deployments (Hugging Face Spaces, Windows VPS, etc.).
+
 ## Usage Overview
 
 Refer to **[USAGE.md](USAGE.md)** for a complete walkthrough that covers prerequisites, configuration screens, troubleshooting tips, and in-depth per-tool examples. Below is a quick multi-line example using `execute_mt5`:
@@ -162,11 +202,11 @@ result = df[['time', 'close', 'return']].tail(10)
 
 ## Architecture & Compliance
 
-- Built on `mcp.server.lowlevel.Server` with stdio transport for Claude Desktop and other MCP clients.
+- Built on `mcp.server.lowlevel.Server` for stdio clients and Gradio v6 for streamable HTTP/SSE, both sharing the same MT5-safe namespace.
 - Safe execution namespace exposes vetted objects (`mt5`, `datetime`, `pd`, `ta`, `numpy`, `matplotlib`) while blocking trading calls and disallowed modules.
-- Runtime validation catches `mt5.initialize()` / `mt5.shutdown()` attempts and highlights the correct workflow before execution.
-- Tool descriptions, examples, and parameter docs are synchronized with MCP SDK guidance for predictable LLM behavior.
-- Optional `--log-file` flag streams structured diagnostics for easier debugging and auditing during deployments.
+- Runtime validation catches `mt5.initialize()` / `mt5.shutdown()` attempts, highlights the correct workflow, and enforces result assignment.
+- Thread-safe MT5 connection management plus IP-scoped rate limiting protect terminals from abusive HTTP workloads.
+- Documentation, tool signatures, and CLI examples match MCP SDK and Gradio MCP guidance for predictable LLM behavior.
 
 ## Troubleshooting
 
