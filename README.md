@@ -13,12 +13,18 @@ MetaTrader 5 integration for Model Context Protocol (MCP). Provides read-only ac
 ```powershell
 # Default behavior (stdio only, backward compatible)
 python -m mt5_mcp
+# or simply:
+mt5-mcp
 
 # Streamable HTTP with rate limiting and a custom port
 python -m mt5_mcp --transport http --host 0.0.0.0 --port 7860 --rate-limit 30
+# or:
+mt5-mcp --transport http --host 0.0.0.0 --port 7860 --rate-limit 30
 
 # Dual mode (stdio + HTTP)
 python -m mt5_mcp --transport both
+# or:
+mt5-mcp --transport both
 ```
 
 **📖 Documentation:**
@@ -101,6 +107,8 @@ pip install -e .[ui]
 pip install "mt5-mcp[ui]"
 ```
 
+**Package naming:** The package is named `mt5-mcp` (with hyphen) on PyPI, but the Python module uses `mt5_mcp` (with underscore). This is standard Python convention.
+
 This will install all required dependencies:
 - `mcp` - Model Context Protocol SDK
 - `MetaTrader5` - Official MT5 Python library
@@ -129,6 +137,19 @@ Add to your Claude Desktop configuration file:
 }
 ```
 
+Alternatively, if the `mt5-mcp` CLI script is in your PATH:
+
+```json
+{
+  "mcpServers": {
+    "mt5": {
+      "command": "mt5-mcp",
+      "args": []
+    }
+  }
+}
+```
+
 ### With Logging (for troubleshooting)
 
 ```json
@@ -149,12 +170,18 @@ Choose how the server exposes MCP transports directly from the command line:
 ```powershell
 # Default behavior (run only stdio like previous version)
 python -m mt5_mcp
+# or:
+mt5-mcp
 
 # Run both transports
 python -m mt5_mcp --transport both
+# or:
+mt5-mcp --transport both
 
 # Run only streamable HTTP
 python -m mt5_mcp --transport http --host 0.0.0.0 --port 7860
+# or:
+mt5-mcp --transport http --host 0.0.0.0 --port 7860
 ```
 
 Additional flags:
@@ -164,8 +191,8 @@ Additional flags:
 
 ### HTTP MCP Clients
 
-1. Install the optional extras: `pip install mt5-mcp[ui]` (or `pip install -e .[ui]` while developing).
-2. Launch the HTTP transport: `python -m mt5_mcp --transport http --host 0.0.0.0 --port 7860`.
+1. Install the optional extras: `pip install "mt5-mcp[ui]"` (or `pip install -e .[ui]` while developing).
+2. Launch the HTTP transport: `python -m mt5_mcp --transport http --host 0.0.0.0 --port 7860` (or `mt5-mcp --transport http`).
 3. Point any MCP client to the new endpoint:
 
 ```json
@@ -177,6 +204,8 @@ Additional flags:
   }
 }
 ```
+
+**Note:** Use `python -m mt5_mcp` (module name with underscore) or the `mt5-mcp` CLI command (package name with hyphen) interchangeably.
 
 This endpoint works with MCP Inspector, Claude Desktop (when configured for HTTP), VS Code extensions, or remote deployments (Hugging Face Spaces, Windows VPS, etc.).
 
@@ -222,6 +251,8 @@ Run the server with logging enabled:
 
 ```powershell
 python -m mt5_mcp --log-file mt5_debug.log
+# or:
+mt5-mcp --log-file mt5_debug.log
 ```
 
 Or configure it in Claude Desktop config (see Configuration section above).

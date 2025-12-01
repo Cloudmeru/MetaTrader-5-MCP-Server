@@ -13,7 +13,9 @@ Comprehensive instructions for installing, configuring, and operating the MT5 MC
    cd C:\Git\MT5-MCP
    pip install -e .
    ```
-  Need the HTTP transport? Install the optional extras: `pip install -e .[ui]` (or `pip install "mt5-mcp[ui]"` from PyPI).
+   Need the HTTP transport? Install the optional extras: `pip install -e .[ui]` (or `pip install "mt5-mcp[ui]"` from PyPI).
+   
+   **Package naming:** Install with `mt5-mcp` (hyphen), import/run as `mt5_mcp` (underscore).
 3. **Register the server with Claude Desktop** (`%APPDATA%\Claude\claude_desktop_config.json`).
    ```json
    {
@@ -21,6 +23,18 @@ Comprehensive instructions for installing, configuring, and operating the MT5 MC
        "mt5": {
          "command": "python",
          "args": ["-m", "mt5_mcp"]
+       }
+     }
+   }
+   ```
+   
+   Or use the CLI script directly (if in PATH):
+   ```json
+   {
+     "mcpServers": {
+       "mt5": {
+         "command": "mt5-mcp",
+         "args": []
        }
      }
    }
@@ -37,20 +51,26 @@ The server now defaults to stdio only so existing MCP configurations keep workin
 ```powershell
 # Default behavior (run only stdio like previous version)
 python -m mt5_mcp
+# or:
+mt5-mcp
 
 # Run both transports
 python -m mt5_mcp --transport both
+# or:
+mt5-mcp --transport both
 
 # Run only streamable HTTP
 python -m mt5_mcp --transport http --port 7860
+# or:
+mt5-mcp --transport http --port 7860
 ```
 
 Add `--rate-limit <value>` when using HTTP to tune per-IP request budgets (set to `0` to disable, which is unsafe on public hosts).
 
 ### HTTP MCP Server Quick Start
 
-1. Install the extras: `pip install mt5-mcp[ui]`.
-2. Launch HTTP mode: `python -m mt5_mcp --transport http --host 0.0.0.0 --port 7860 --rate-limit 10`.
+1. Install the extras: `pip install "mt5-mcp[ui]"`.
+2. Launch HTTP mode: `python -m mt5_mcp --transport http --host 0.0.0.0 --port 7860 --rate-limit 10` (or `mt5-mcp --transport http`).
 3. Point any MCP client to `http://<host>:7860/gradio_api/mcp/`:
 
 ```json
@@ -63,21 +83,25 @@ Add `--rate-limit <value>` when using HTTP to tune per-IP request budgets (set t
 }
 ```
 
+**CLI options:** Use `python -m mt5_mcp` (module) or `mt5-mcp` (CLI script) interchangeably.
+
 The endpoint speaks streamable HTTP (current MCP standard), works with SSE-compatible tools, and can be deployed to Windows servers or Hugging Face Spaces.
 
 ### Dual-Transport Mode
 
-Use `python -m mt5_mcp --transport both` when you want stdio and HTTP simultaneously. The CLI keeps stdio unlimited for local clients and rate-limits HTTP per IP. Override host/port/rate limit as needed:
+Use `python -m mt5_mcp --transport both` (or `mt5-mcp --transport both`) when you want stdio and HTTP simultaneously. The CLI keeps stdio unlimited for local clients and rate-limits HTTP per IP. Override host/port/rate limit as needed:
 
 ```powershell
 python -m mt5_mcp --transport both --host 0.0.0.0 --port 7860 --rate-limit 20
+# or:
+mt5-mcp --transport both --host 0.0.0.0 --port 7860 --rate-limit 20
 ```
 
 ### Deployment Recipes
 
-- **Local stdio (default):** `python -m mt5_mcp`
-- **Local HTTP:** `python -m mt5_mcp --transport http --port 7860`
-- **Windows VPS / HF Spaces:** install `mt5-mcp[ui]`, run HTTP mode, and place the MT5 terminal on the same machine (MT5 remains Windows-only).
+- **Local stdio (default):** `python -m mt5_mcp` or `mt5-mcp`
+- **Local HTTP:** `python -m mt5_mcp --transport http --port 7860` or `mt5-mcp --transport http --port 7860`
+- **Windows VPS / HF Spaces:** install `"mt5-mcp[ui]"`, run HTTP mode, and place the MT5 terminal on the same machine (MT5 remains Windows-only).
 
 ## 2. Namespace Reference
 
@@ -261,7 +285,7 @@ The following read-only calls are supported in both `execute_mt5` and `mt5_query
 1. **Connection issues** – Start the MT5 terminal first, confirm algo trading is enabled, and ensure no other MT5 Python clients are running.
 2. **Result missing** – Always assign to `result` (or the documented alias) before returning.
 3. **Forbidden functions** – The server blocks `mt5.initialize()` / `mt5.shutdown()` and returns guidance; remove those calls and retry.
-4. **View logs** – Launch with `python -m mt5_mcp --log-file mt5_debug.log` and inspect the generated log for stack traces or MT5 errors.
+4. **View logs** – Launch with `python -m mt5_mcp --log-file mt5_debug.log` (or `mt5-mcp --log-file mt5_debug.log`) and inspect the generated log for stack traces or MT5 errors.
 5. **Chart paths** – Generated PNGs are written to the working directory and surfaced in the tool response; ensure the directory is writable.
 
 ## 9. Tips for AI Assistants
