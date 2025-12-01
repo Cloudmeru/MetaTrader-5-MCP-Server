@@ -60,12 +60,28 @@ def validate_symbol(
     symbol: str,
 ) -> Tuple[bool, Optional[str], Optional[Dict[str, Any]]]:
     """
-    Validate symbol exists in MT5.
+    Validate symbol exists in MT5 and auto-select it in Market Watch.
+
+    This function ensures the symbol is available for querying by:
+    1. Attempting to select (enable) the symbol in Market Watch
+    2. Validating symbol info is retrievable
+    3. Suggesting similar symbols if not found
 
     Returns:
         (is_valid, error_message, correction_dict)
     """
     symbol = symbol.strip().upper()
+
+    # First, try to select/enable the symbol in Market Watch
+    # This is required for symbols not currently visible in Market Watch
+    try:
+        select_result = mt5.symbol_select(symbol, True)
+        if select_result:
+            # Clear cache since we just enabled a new symbol
+            if hasattr(get_symbol_info_cached, "_cache"):
+                get_symbol_info_cached._cache.pop(symbol, None)
+    except Exception:
+        pass  # Continue even if select fails - symbol_info will catch actual errors
 
     # Check if symbol exists
     symbol_info = get_symbol_info_cached(symbol)
@@ -188,8 +204,7 @@ def convert_timeframe(timeframe_str: str) -> int:
     tf = timeframe_str.upper()
     if tf not in TIMEFRAME_MAP:
         raise ValueError(
-            f"Invalid timeframe: '{timeframe_str}'. "
-            f"Valid: {', '.join(TIMEFRAME_MAP.keys())}"
+            f"Invalid timeframe: '{timeframe_str}'. " f"Valid: {', '.join(TIMEFRAME_MAP.keys())}"
         )
     return TIMEFRAME_MAP[tf]
 
@@ -217,9 +232,7 @@ def convert_order_type(order_type_str: str) -> int:
 # ============================================================================
 
 
-def validate_and_adjust_volume(
-    symbol: str, volume: float
-) -> Tuple[float, Optional[str]]:
+def validate_and_adjust_volume(symbol: str, volume: float) -> Tuple[float, Optional[str]]:
     """
     Validate and adjust volume to symbol constraints.
 
@@ -309,9 +322,7 @@ def validate_ta_function(function_path: str) -> Tuple[bool, Optional[str]]:
 
     parts = function_path.split(".")
     if len(parts) != 3:
-        return False, (
-            "Function path must be 'ta.<module>.<function>', got: " f"'{function_path}'"
-        )
+        return False, ("Function path must be 'ta.<module>.<function>', got: " f"'{function_path}'")
 
     try:
         import ta

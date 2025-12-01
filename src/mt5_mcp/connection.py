@@ -1,10 +1,36 @@
 """MT5 connection management and safe namespace setup."""
 
 import logging
+import threading
 from typing import Dict, Any, Optional
 import MetaTrader5 as mt5
 
 logger = logging.getLogger(__name__)
+
+# Global lock for MT5 thread safety (MT5 library is NOT thread-safe)
+_mt5_lock = threading.Lock()
+
+
+def safe_mt5_call(func, *args, **kwargs):
+    """
+    Execute MT5 function call with thread safety.
+
+    This wrapper ensures that only one thread can call MT5 functions at a time,
+    preventing race conditions and potential crashes from concurrent access.
+
+    Args:
+        func: MT5 function to call
+        *args: Positional arguments for the function
+        **kwargs: Keyword arguments for the function
+
+    Returns:
+        Result from the MT5 function call
+
+    Example:
+        >>> rates = safe_mt5_call(mt5.copy_rates_from_pos, "BTCUSD", mt5.TIMEFRAME_H1, 0, 100)
+    """
+    with _mt5_lock:
+        return func(*args, **kwargs)
 
 
 class MT5Connection:
@@ -17,14 +43,15 @@ class MT5Connection:
         self._initialize()
 
     def _initialize(self):
-        """Initialize connection to MT5 terminal."""
-        if not mt5.initialize():
-            error = mt5.last_error()
-            logger.error(f"MT5 initialization failed: {error}")
-            raise RuntimeError(f"Failed to initialize MT5: {error}")
+        """Initialize connection to MT5 terminal with thread safety."""
+        with _mt5_lock:
+            if not mt5.initialize():
+                error = mt5.last_error()
+                logger.error(f"MT5 initialization failed: {error}")
+                raise RuntimeError(f"Failed to initialize MT5: {error}")
 
-        self._initialized = True
-        logger.info("MT5 connection initialized successfully")
+            self._initialized = True
+            logger.info("MT5 connection initialized successfully")
 
         # Build safe namespace with read-only functions
         self._safe_namespace = self._build_safe_namespace()
@@ -117,33 +144,33 @@ class MT5Connection:
         return namespace
 
     def validate_connection(self) -> bool:
-        """Validate MT5 connection is still active."""
+        """Validate MT5 connection is still active with thread safety."""
         if not self._initialized:
             return False
 
-        # Check if terminal is still connected
-        terminal_info = mt5.terminal_info()
-        if terminal_info is None:
-            logger.warning("MT5 terminal connection lost")
-            return False
+        # Check if terminal is still connected (thread-safe)
+        with _mt5_lock:
+            terminal_info = mt5.terminal_info()
+            if terminal_info is None:
+                logger.warning("MT5 terminal connection lost")
+                return False
 
         return True
 
     def get_safe_namespace(self) -> Dict[str, Any]:
         """Get the safe execution namespace."""
         if not self.validate_connection():
-            raise RuntimeError(
-                "MT5 connection is not active. Ensure MT5 terminal is running."
-            )
+            raise RuntimeError("MT5 connection is not active. Ensure MT5 terminal is running.")
 
         return self._safe_namespace.copy()
 
     def shutdown(self):
-        """Shutdown MT5 connection."""
-        if self._initialized:
-            mt5.shutdown()
-            self._initialized = False
-            logger.info("MT5 connection closed")
+        """Shutdown MT5 connection with thread safety."""
+        with _mt5_lock:
+            if self._initialized:
+                mt5.shutdown()
+                self._initialized = False
+                logger.info("MT5 connection closed")
 
 
 # Global connection instance

@@ -91,19 +91,83 @@ def _prepare_code(command: str) -> Tuple[object, bool]:
     return code_obj, capture_expression
 
 
-def execute_command(
-    command: str, namespace: Dict[str, Any], show_traceback: bool = True
-) -> str:
+def execute_command(command: str, namespace: Dict[str, Any], show_traceback: bool = True) -> str:
     """
     Execute Python command in restricted namespace and return formatted result.
 
+    This is a fallback tool for advanced users who need custom MT5 operations
+    not covered by mt5_query or mt5_analyze. Use with caution as incorrect
+    code can cause errors or unexpected behavior.
+
+    CRITICAL RULES:
+    - NEVER call mt5.initialize() or mt5.shutdown() (connection pre-managed)
+    - MT5 is ALREADY connected - start with mt5.copy_rates_from_pos(...)
+    - ALWAYS assign final output to 'result' variable for automatic return
+
+    Available modules: mt5 (MetaTrader5), pd/pandas, np/numpy, plt/matplotlib,
+    ta (technical indicators), datetime
+
+    Timeframes: mt5.TIMEFRAME_M1, M5, M15, M30, H1, H4, D1, W1, MN1
+
     Args:
-        command: Python code to execute (single or multi-line)
-        namespace: Restricted namespace containing available functions/modules
-        show_traceback: Whether to include full traceback on errors
+        command (str): Python code to execute. Must be valid Python syntax.
+            The code runs in a restricted namespace with MT5 and data science
+            libraries pre-imported. Assign final output to 'result' variable
+            or use it as the last expression.
+        namespace (Dict[str, Any]): Restricted namespace containing available
+            functions and modules (mt5, pandas, numpy, etc.). Connection to
+            MT5 is already initialized.
+        show_traceback (bool): Show full Python traceback on errors (default: True).
+            Set to False for cleaner error messages in production.
 
     Returns:
-        Formatted result string or error message
+        str: Formatted execution result. DataFrames are rendered as markdown tables,
+            dicts/lists as JSON, and other types as strings. Returns error message
+            if execution fails.
+
+    Raises:
+        MT5ValidationError: Command has syntax errors
+        Exception: Runtime errors during command execution (captured and formatted)
+
+    Examples:
+        Get symbol information:
+        >>> execute_command(
+        ...     "result = mt5.symbol_info('BTCUSD')._asdict()",
+        ...     namespace
+        ... )
+
+        Calculate custom indicator:
+        >>> command = '''
+        ... rates = mt5.copy_rates_from_pos('BTCUSD', mt5.TIMEFRAME_H1, 0, 100)
+        ... df = pd.DataFrame(rates)
+        ... df['custom_ma'] = df['close'].rolling(20).mean()
+        ... df['volatility'] = (df['high'] - df['low']) / df['close']
+        ... result = df[['close', 'custom_ma', 'volatility']].tail(10)
+        ... '''
+        >>> execute_command(command, namespace)
+
+        Multi-step analysis:
+        >>> command = '''
+        ... # Get data
+        ... rates = mt5.copy_rates_from_pos('EURUSD', mt5.TIMEFRAME_H4, 0, 100)
+        ... df = pd.DataFrame(rates)
+        ...
+        ... # Calculate RSI
+        ... df['RSI'] = ta.momentum.rsi(df['close'], window=14)
+        ...
+        ... # Find overbought conditions
+        ... overbought = df[df['RSI'] > 70]
+        ... result = {
+        ...     'current_rsi': df['RSI'].iloc[-1],
+        ...     'overbought_count': len(overbought),
+        ...     'last_overbought': (
+        ...         overbought.tail(1)['time'].values[0]
+        ...         if len(overbought) > 0
+        ...         else None
+        ...     )
+        ... }
+        ... '''
+        >>> execute_command(command, namespace)
     """
     logger.info(f"Executing command: {command[:100]}...")
 

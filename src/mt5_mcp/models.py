@@ -135,13 +135,9 @@ class IndicatorSpec(BaseModel):
 class ChartPanel(BaseModel):
     """Configuration for a chart panel."""
 
-    columns: List[str] = Field(
-        ..., description="Column names to plot in this panel", min_length=1
-    )
+    columns: List[str] = Field(..., description="Column names to plot in this panel", min_length=1)
 
-    style: str = Field(
-        default="line", description="Plot style: 'line', 'scatter', 'bar'"
-    )
+    style: str = Field(default="line", description="Plot style: 'line', 'scatter', 'bar'")
 
     y_label: Optional[str] = Field(None, description="Y-axis label")
 
@@ -169,9 +165,7 @@ class ChartConfig(BaseModel):
         max_length=5,
     )
 
-    title: Optional[str] = Field(
-        None, description="Chart title (auto-generated if not provided)"
-    )
+    title: Optional[str] = Field(None, description="Chart title (auto-generated if not provided)")
 
     filename: str = Field(
         default="chart.png", description="Output filename", pattern=r"^[\w\-]+\.png$"
@@ -216,13 +210,9 @@ class ForecastConfig(BaseModel):
         description="Seasonality mode: 'additive' or 'multiplicative'",
     )
 
-    growth: str = Field(
-        default="linear", description="Growth model: 'linear' or 'logistic'"
-    )
+    growth: str = Field(default="linear", description="Growth model: 'linear' or 'logistic'")
 
-    plot: bool = Field(
-        default=True, description="Generate forecast visualization chart"
-    )
+    plot: bool = Field(default=True, description="Generate forecast visualization chart")
 
     plot_components: bool = Field(
         default=False,
@@ -295,9 +285,7 @@ class MT5AnalysisRequest(BaseModel):
         """Validate output format."""
         v = v.lower()
         if v not in ["markdown", "json", "chart_only"]:
-            raise ValueError(
-                "output_format must be 'markdown', 'json', or 'chart_only'"
-            )
+            raise ValueError("output_format must be 'markdown', 'json', or 'chart_only'")
         return v
 
     class Config:

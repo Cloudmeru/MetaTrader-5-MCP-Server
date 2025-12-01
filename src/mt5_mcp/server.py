@@ -437,9 +437,7 @@ async def handle_mt5_analyze_tool(arguments: dict) -> list[TextContent]:
         # Add clickable hyperlinks for charts if they exist
         chart_links = []
         if response.chart_path:
-            chart_links.append(
-                f"📊 Chart: {_format_file_hyperlink(response.chart_path)}"
-            )
+            chart_links.append(f"📊 Chart: {_format_file_hyperlink(response.chart_path)}")
         if response.forecast_chart_path:
             chart_links.append(
                 f"🔮 Forecast: {_format_file_hyperlink(response.forecast_chart_path)}"
@@ -541,9 +539,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
     # Check if result variable is assigned (warn but don't block)
     if "result" not in command and "plt.savefig" not in command:
-        logger.warning(
-            "Command may not assign to 'result' variable - output may be lost"
-        )
+        logger.warning("Command may not assign to 'result' variable - output may be lost")
 
     # Validate command format to help LLMs
     command_stripped = command.strip()
