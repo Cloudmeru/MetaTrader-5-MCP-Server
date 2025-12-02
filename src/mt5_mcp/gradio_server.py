@@ -9,7 +9,14 @@ import gradio as gr
 
 from .handlers import handle_mt5_query, handle_mt5_analysis
 from .executor import execute_command
-from .connection import get_safe_namespace, get_connection
+from .connection import get_safe_namespace, get_connection, safe_mt5_call
+from .error_utils import (
+    ErrorType,
+    create_error_response,
+    safe_json_parse,
+    safe_enum_conversion,
+    format_json_response,
+)
 from .models import (
     MT5QueryRequest,
     MT5AnalysisRequest,
@@ -255,104 +262,251 @@ def mt5_analyze_tool(  # pylint: disable=too-many-arguments, too-many-locals
         ...     enable_ml_prediction=True
         ... )
     """
-    # Apply rate limiting
-    if request:
-        check_rate_limit(request)
-
-    # Ensure MT5 connection is initialized
-    get_connection()
-
     try:
-        # Parse JSON string parameters
+        # Apply rate limiting
+        if request:
+            try:
+                check_rate_limit(request)
+            except gr.Error:
+                raise
+            except Exception as e:
+                logger.error(f"Rate limit check failed: {e}", exc_info=True)
+                return format_json_response(
+                    create_error_response(
+                        ErrorType.RUNTIME_ERROR,
+                        f"Rate limit check failed: {str(e)}",
+                        operation="rate_limit_check"
+                    )
+                )
+
+        # Validate required fields
+        if not query_operation or not isinstance(query_operation, str):
+            return format_json_response(
+                create_error_response(
+                    ErrorType.VALIDATION_ERROR,
+                    "query_operation must be a non-empty string",
+                    operation="mt5_analyze"
+                )
+            )
+
+        if not query_symbol or not isinstance(query_symbol, str):
+            return format_json_response(
+                create_error_response(
+                    ErrorType.VALIDATION_ERROR,
+                    "query_symbol must be a non-empty string",
+                    operation="mt5_analyze"
+                )
+            )
+
+        # Ensure MT5 connection is initialized
         try:
-            query_params_dict = json.loads(query_parameters) if query_parameters else {}
-        except json.JSONDecodeError as e:
-            return json.dumps({"success": False, "error": f"Invalid JSON in query_parameters: {e}"})
+            get_connection()
+        except Exception as e:
+            logger.error(f"MT5 connection failed: {e}", exc_info=True)
+            return format_json_response(
+                create_error_response(
+                    ErrorType.MT5_CONNECTION,
+                    f"Failed to connect to MT5: {str(e)}",
+                    operation="mt5_analyze"
+                )
+            )
 
-        indicators_list = None
-        if indicators and indicators.strip():
-            try:
-                indicators_list = json.loads(indicators)
-            except json.JSONDecodeError as e:
-                return json.dumps({"success": False, "error": f"Invalid JSON in indicators: {e}"})
+        # Parse JSON string parameters with safe parsing
+        query_params_dict, parse_error = safe_json_parse(
+            query_parameters, "query_parameters", default={}
+        )
+        if parse_error:
+            return format_json_response(parse_error)
 
-        chart_panels_list = None
-        if chart_panels and chart_panels.strip():
-            try:
-                chart_panels_list = json.loads(chart_panels)
-            except json.JSONDecodeError as e:
-                return json.dumps({"success": False, "error": f"Invalid JSON in chart_panels: {e}"})
+        indicators_list, parse_error = safe_json_parse(indicators, "indicators", default=None)
+        if parse_error:
+            return format_json_response(parse_error)
+
+        chart_panels_list, parse_error = safe_json_parse(
+            chart_panels, "chart_panels", default=None
+        )
+        if parse_error:
+            return format_json_response(parse_error)
+
+        # Validate parameter types
+        if not isinstance(query_params_dict, dict):
+            return format_json_response(
+                create_error_response(
+                    ErrorType.TYPE_ERROR,
+                    f"query_parameters must be a JSON object, got {type(query_params_dict).__name__}",
+                    operation="mt5_analyze"
+                )
+            )
+
+        if indicators_list is not None and not isinstance(indicators_list, list):
+            return format_json_response(
+                create_error_response(
+                    ErrorType.TYPE_ERROR,
+                    f"indicators must be a JSON array, got {type(indicators_list).__name__}",
+                    operation="mt5_analyze"
+                )
+            )
+
+        if chart_panels_list is not None and not isinstance(chart_panels_list, list):
+            return format_json_response(
+                create_error_response(
+                    ErrorType.TYPE_ERROR,
+                    f"chart_panels must be a JSON array, got {type(chart_panels_list).__name__}",
+                    operation="mt5_analyze"
+                )
+            )
+
+        # Convert operation string to enum with safe conversion
+        query_operation_enum, enum_error = safe_enum_conversion(
+            query_operation, MT5Operation, "query_operation"
+        )
+        if enum_error:
+            return format_json_response(enum_error)
 
         # Build query request
-        query_operation_enum = MT5Operation(query_operation)
-        query_request = MT5QueryRequest(
-            operation=query_operation_enum,
-            symbol=query_symbol,
-            parameters=query_params_dict,
-        )
+        try:
+            query_request = MT5QueryRequest(
+                operation=query_operation_enum,
+                symbol=query_symbol,
+                parameters=query_params_dict,
+            )
+        except Exception as e:
+            logger.error(f"Failed to create query request: {e}", exc_info=True)
+            return format_json_response(
+                create_error_response(
+                    ErrorType.VALIDATION_ERROR,
+                    f"Invalid query request: {str(e)}",
+                    operation="mt5_analyze"
+                )
+            )
 
         # Build indicator specs
         indicator_specs = None
         if indicators_list:
-            indicator_specs = [
-                IndicatorSpec(
-                    function=ind.get("function"),
-                    params=ind.get("params"),
-                    column_name=ind.get("column_name"),
+            try:
+                indicator_specs = [
+                    IndicatorSpec(
+                        function=ind.get("function"),
+                        params=ind.get("params"),
+                        column_name=ind.get("column_name"),
+                    )
+                    for ind in indicators_list
+                ]
+            except Exception as e:
+                logger.error(f"Failed to build indicator specs: {e}", exc_info=True)
+                return format_json_response(
+                    create_error_response(
+                        ErrorType.VALIDATION_ERROR,
+                        f"Invalid indicator specification: {str(e)}",
+                        operation="mt5_analyze"
+                    )
                 )
-                for ind in indicators_list
-            ]
 
         # Build chart config
         chart_config = None
         if enable_chart and chart_panels_list:
-            from .models import ChartPanel
+            try:
+                from .models import ChartPanel
 
-            panels = [
-                ChartPanel(
-                    columns=panel.get("columns", []),
-                    style=panel.get("style", "line"),
-                    reference_lines=panel.get("reference_lines"),
-                    y_label=panel.get("y_label"),
-                    y_limits=panel.get("y_limits"),
+                panels = [
+                    ChartPanel(
+                        columns=panel.get("columns", []),
+                        style=panel.get("style", "line"),
+                        reference_lines=panel.get("reference_lines"),
+                        y_label=panel.get("y_label"),
+                        y_limits=panel.get("y_limits"),
+                    )
+                    for panel in chart_panels_list
+                ]
+                chart_config = ChartConfig(type=chart_type, panels=panels)
+            except Exception as e:
+                logger.error(f"Failed to build chart config: {e}", exc_info=True)
+                return format_json_response(
+                    create_error_response(
+                        ErrorType.VALIDATION_ERROR,
+                        f"Invalid chart configuration: {str(e)}",
+                        operation="mt5_analyze"
+                    )
                 )
-                for panel in chart_panels_list
-            ]
-            chart_config = ChartConfig(type=chart_type, panels=panels)
 
         # Build forecast config
         forecast_config = None
         if enable_forecast:
-            forecast_config = ForecastConfig(
-                periods=forecast_periods,
-                enable_ml_prediction=enable_ml_prediction,
-                plot=True,
-            )
+            try:
+                # Validate forecast_periods
+                if not isinstance(forecast_periods, int) or forecast_periods <= 0:
+                    return format_json_response(
+                        create_error_response(
+                            ErrorType.VALIDATION_ERROR,
+                            f"forecast_periods must be a positive integer, got {forecast_periods}",
+                            operation="mt5_analyze"
+                        )
+                    )
+
+                forecast_config = ForecastConfig(
+                    periods=forecast_periods,
+                    enable_ml_prediction=enable_ml_prediction,
+                    plot=True,
+                )
+            except Exception as e:
+                logger.error(f"Failed to build forecast config: {e}", exc_info=True)
+                return format_json_response(
+                    create_error_response(
+                        ErrorType.VALIDATION_ERROR,
+                        f"Invalid forecast configuration: {str(e)}",
+                        operation="mt5_analyze"
+                    )
+                )
 
         # Create analysis request
-        analysis_request = MT5AnalysisRequest(
-            query=query_request,
-            indicators=indicator_specs,
-            chart=chart_config,
-            forecast=forecast_config,
-            output_format=output_format,
-            tail=tail,
-        )
+        try:
+            analysis_request = MT5AnalysisRequest(
+                query=query_request,
+                indicators=indicator_specs,
+                chart=chart_config,
+                forecast=forecast_config,
+                output_format=output_format,
+                tail=tail,
+            )
+        except Exception as e:
+            logger.error(f"Failed to create analysis request: {e}", exc_info=True)
+            return format_json_response(
+                create_error_response(
+                    ErrorType.VALIDATION_ERROR,
+                    f"Invalid analysis request: {str(e)}",
+                    operation="mt5_analyze"
+                )
+            )
 
-        # Execute analysis
-        response = handle_mt5_analysis(analysis_request)
+        # Execute analysis with error handling
+        try:
+            response = handle_mt5_analysis(analysis_request)
+            return json.dumps(response.model_dump(), default=str)
+        except Exception as e:
+            logger.error(f"MT5 analysis execution failed: {str(e)}", exc_info=True)
+            return format_json_response(
+                create_error_response(
+                    ErrorType.CALCULATION_ERROR,
+                    f"Analysis execution failed: {str(e)}",
+                    operation="mt5_analyze",
+                    details={
+                        "symbol": query_symbol,
+                        "operation": query_operation
+                    }
+                )
+            )
 
-        # Return as JSON string
-        return json.dumps(response.model_dump(), default=str)
-
+    except gr.Error:
+        raise
     except Exception as e:
-        logger.error(f"MT5 analysis failed: {str(e)}", exc_info=True)
-        return json.dumps(
-            {
-                "success": False,
-                "error": str(e),
-                "error_type": type(e).__name__,
-            }
+        logger.error(f"Unexpected error in mt5_analyze_tool: {str(e)}", exc_info=True)
+        return format_json_response(
+            create_error_response(
+                ErrorType.UNKNOWN_ERROR,
+                f"Unexpected error: {str(e)}",
+                operation="mt5_analyze",
+                details={"exception_type": type(e).__name__}
+            )
         )
 
 
@@ -406,22 +560,92 @@ def mt5_execute_tool(
         ... '''
         >>> mt5_execute_tool(command)
     """
-    # Apply rate limiting
-    if request:
-        check_rate_limit(request)
-
     try:
-        namespace = get_safe_namespace()
-        result = execute_command(command, namespace, show_traceback)
-        return result
+        # Apply rate limiting
+        if request:
+            try:
+                check_rate_limit(request)
+            except gr.Error:
+                raise
+            except Exception as e:
+                logger.error(f"Rate limit check failed: {e}", exc_info=True)
+                error_response = create_error_response(
+                    ErrorType.RUNTIME_ERROR,
+                    f"Rate limit check failed: {str(e)}",
+                    operation="rate_limit_check"
+                )
+                return format_json_response(error_response)
 
+        # Validate command
+        if not command or not isinstance(command, str):
+            error_response = create_error_response(
+                ErrorType.VALIDATION_ERROR,
+                "Command must be a non-empty string",
+                operation="mt5_execute",
+                details={"received_type": type(command).__name__}
+            )
+            return format_json_response(error_response)
+
+        # Check command length to prevent abuse
+        if len(command) > 50000:  # 50KB limit
+            error_response = create_error_response(
+                ErrorType.VALIDATION_ERROR,
+                f"Command too long: {len(command)} characters (max 50000)",
+                operation="mt5_execute"
+            )
+            return format_json_response(error_response)
+
+        # Check for dangerous operations
+        dangerous_patterns = [
+            "mt5.initialize",
+            "mt5.shutdown",
+            "os.system",
+            "subprocess",
+            "eval(",
+            "exec(",
+            "__import__",
+        ]
+        for pattern in dangerous_patterns:
+            if pattern in command:
+                error_response = create_error_response(
+                    ErrorType.VALIDATION_ERROR,
+                    f"Dangerous operation detected: {pattern}",
+                    operation="mt5_execute",
+                    details={"pattern": pattern}
+                )
+                return format_json_response(error_response)
+
+        # Get safe namespace
+        try:
+            namespace = get_safe_namespace()
+        except Exception as e:
+            logger.error(f"Failed to get namespace: {e}", exc_info=True)
+            error_response = create_error_response(
+                ErrorType.MT5_CONNECTION,
+                f"Failed to initialize execution environment: {str(e)}",
+                operation="mt5_execute"
+            )
+            return format_json_response(error_response)
+
+        # Execute command with error handling
+        try:
+            result = execute_command(command, namespace, show_traceback)
+            return result
+        except Exception as e:
+            logger.error(f"Code execution failed: {str(e)}", exc_info=True)
+            if show_traceback:
+                import traceback
+                return f"Error executing code:\n\n{traceback.format_exc()}"
+            return f"Error: {type(e).__name__}: {str(e)}"
+
+    except gr.Error:
+        raise
     except Exception as e:
-        logger.error(f"Code execution failed: {str(e)}", exc_info=True)
+        logger.error(f"Unexpected error in mt5_execute_tool: {str(e)}", exc_info=True)
         if show_traceback:
             import traceback
-
-            return f"Error executing code:\n\n{traceback.format_exc()}"
-        return f"Error: {type(e).__name__}: {str(e)}"
+            return f"Unexpected error:\n\n{traceback.format_exc()}"
+        return f"Unexpected error: {type(e).__name__}: {str(e)}"
 
 
 # =============================================================================
@@ -430,110 +654,410 @@ def mt5_execute_tool(
 
 
 def create_gradio_interface():
-    """Create Gradio interface with all MCP tools."""
+    """
+    Create Gradio interface with multiple pages: Status, Transaction History, and Open Positions.
 
-    # Tool 1: Query Interface
-    query_interface = gr.Interface(
-        fn=mt5_query_tool,
-        inputs=[
-            gr.Textbox(
-                label="Operation",
-                placeholder="copy_rates_from_pos",
-            ),
-            gr.Textbox(
-                label="Symbol",
-                placeholder="BTCUSD",
-            ),
-            gr.Textbox(
-                label="Parameters (JSON string)",
-                placeholder='{"timeframe": "H1", "count": 100}',
-            ),
-        ],
-        outputs=gr.Textbox(label="Results (JSON)", lines=20),
-        title="MT5 Query",
-        description="Query MT5 data (rates, symbol info, account info)",
-        examples=[
-            ["symbol_info", "BTCUSD", ""],
-            [
-                "copy_rates_from_pos",
-                "EURUSD",
-                '{"timeframe": "H1", "start_pos": 0, "count": 100}',
-            ],
-            ["account_info", "", ""],
-        ],
-    )
+    Returns:
+        gr.Blocks: Gradio demo with tabbed interface
+    """
+    
+    def get_server_status():
+        """Get current server status and metrics."""
+        try:
+            # Try to get MT5 connection and validate it
+            mt5_conn = get_connection()
+            
+            # Validate connection first
+            if not mt5_conn.validate_connection():
+                raise RuntimeError("MT5 terminal is not connected. Please ensure MT5 is running.")
+            
+            mt5_status = "✅ Connected"
+            
+            # Get terminal info using safe_mt5_call
+            import MetaTrader5 as mt5
+            terminal_info = safe_mt5_call(mt5.terminal_info)
+            if terminal_info:
+                terminal_data = terminal_info._asdict()
+                company = terminal_data.get('company', 'Unknown')
+                build = terminal_data.get('build', 'Unknown')
+                terminal_details = f"{company} (Build {build})"
+            else:
+                terminal_details = "Unable to fetch details"
+                
+            # Get account info using safe_mt5_call
+            account_info = safe_mt5_call(mt5.account_info)
+            if account_info:
+                acc_data = account_info._asdict()
+                account_details = (
+                    f"Account: {acc_data.get('login', 'N/A')}\n"
+                    f"Balance: {acc_data.get('balance', 0):.2f} {acc_data.get('currency', 'USD')}\n"
+                    f"Server: {acc_data.get('server', 'N/A')}"
+                )
+            else:
+                account_details = "Unable to fetch account details"
+                
+            # Count available symbols using safe_mt5_call
+            symbols = safe_mt5_call(mt5.symbols_total)
+            symbol_count = f"{symbols} symbols available" if symbols else "Unable to count symbols"
+            
+        except Exception as e:
+            mt5_status = f"❌ Disconnected: {str(e)}"
+            terminal_details = "N/A"
+            account_details = "N/A"
+            symbol_count = "N/A"
+        
+        # Rate limit stats
+        total_ips = len(_rate_limit_store)
+        rate_limit_info = (
+            f"Rate Limit: {HTTP_RATE_LIMIT} req/min per IP\n"
+            f"Active IPs: {total_ips}"
+        )
+        
+        # Build status report
+        status_report = f"""## MetaTrader 5 MCP Server Status
 
-    # Tool 2: Analysis Interface
-    analysis_interface = gr.Interface(
-        fn=mt5_analyze_tool,
-        inputs=[
-            gr.Textbox(label="Query Operation", value="copy_rates_from_pos"),
-            gr.Textbox(label="Query Symbol", value="BTCUSD"),
-            gr.Textbox(
-                label="Query Parameters (JSON)",
-                value='{"timeframe": "H1", "count": 100}',
-            ),
-            gr.Textbox(
-                label="Indicators (JSON array)",
-                value="",
-                placeholder='[{"function": "ta.momentum.rsi", "params": {"window": 14}}]',
-            ),
-            gr.Checkbox(label="Enable Chart", value=False),
-            gr.Radio(["single", "multi"], label="Chart Type", value="multi"),
-            gr.Textbox(
-                label="Chart Panels (JSON array)",
-                value="",
-                placeholder='[{"columns": ["close", "rsi"]}]',
-            ),
-            gr.Checkbox(label="Enable Forecast", value=False),
-            gr.Number(label="Forecast Periods", value=24),
-            gr.Checkbox(label="Enable ML Prediction", value=False),
-            gr.Radio(
-                ["markdown", "json", "chart_only"],
-                label="Output Format",
-                value="markdown",
-            ),
-            gr.Number(label="Tail (rows to return)", value=None),
-        ],
-        outputs=gr.Textbox(label="Analysis Results (JSON)", lines=20),
-        title="MT5 Analysis",
-        description="Comprehensive analysis with indicators, charts, and forecasting",
-    )
+### Connection Status
+{mt5_status}
 
-    # Tool 3: Execute Interface
-    execute_interface = gr.Interface(
-        fn=mt5_execute_tool,
-        inputs=[
-            gr.Code(
-                label="Python Command",
-                language="python",
-                lines=10,
-            ),
-            gr.Checkbox(label="Show Traceback", value=True),
-        ],
-        outputs=gr.Textbox(label="Result", lines=20),
-        title="MT5 Execute",
-        description="Execute raw Python code (advanced users only)",
-        examples=[
-            ["result = mt5.symbol_info('BTCUSD')._asdict()", True],
-            [
-                (
-                    "rates = mt5.copy_rates_from_pos('EURUSD', mt5.TIMEFRAME_H1, 0, 50)\n"
-                    "df = pd.DataFrame(rates)\n"
-                    "result = df.tail(10)"
+### Terminal Information
+{terminal_details}
+
+### Account Information
+{account_details}
+
+### Market Data
+{symbol_count}
+
+### Server Configuration
+{rate_limit_info}
+
+### MCP Endpoint
+`/gradio_api/mcp/` (Streamable HTTP/SSE)
+
+### Available Tools
+- `mt5_query` - Structured MT5 data queries
+- `mt5_analyze` - Technical analysis with indicators & forecasting
+- `mt5_execute` - Raw Python execution (read-only namespace)
+
+---
+*Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
+"""
+        return status_report
+    
+    def get_transaction_history(days=90):
+        """Get transaction history with Plotly chart."""
+        try:
+            import MetaTrader5 as mt5
+            import pandas as pd
+            
+            # Import plotly
+            try:
+                import plotly.graph_objects as go
+                from plotly.subplots import make_subplots
+            except ImportError:
+                return None, "⚠️ Plotly not installed. Run: pip install plotly>=5.18.0"
+            
+            # Get MT5 connection
+            mt5_conn = get_connection()
+            if not mt5_conn.validate_connection():
+                return None, "❌ MT5 not connected"
+            
+            # Get deals from selected time range
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=days)
+            
+            deals = safe_mt5_call(mt5.history_deals_get, start_date, end_date)
+            
+            if not deals or len(deals) == 0:
+                return None, f"📊 No transaction history found in the last {days} days"
+            
+            # Convert to DataFrame
+            df = pd.DataFrame(list(deals), columns=deals[0]._asdict().keys())
+            df['time'] = pd.to_datetime(df['time'], unit='s')
+            
+            # Identify deposit/withdrawal (entry = 2 for balance operations)
+            df['is_balance_op'] = df['entry'] == 2
+            df['type_name'] = df.apply(
+                lambda row: '💵 Deposit' if row['is_balance_op'] and row['profit'] > 0
+                else '💸 Withdrawal' if row['is_balance_op'] and row['profit'] < 0
+                else '📈 Trade', axis=1
+            )
+            
+            # Calculate cumulative profit
+            df['cumulative_profit'] = df['profit'].cumsum()
+            
+            # Create subplot figure
+            fig = make_subplots(
+                rows=2, cols=1,
+                row_heights=[0.7, 0.3],
+                subplot_titles=('Cumulative P&L', 'Individual Transactions'),
+                vertical_spacing=0.12
+            )
+            
+            # Add cumulative profit line
+            fig.add_trace(
+                go.Scatter(
+                    x=df['time'], 
+                    y=df['cumulative_profit'],
+                    mode='lines',
+                    name='Cumulative P&L',
+                    line=dict(color='#2E86AB', width=2),
+                    hovertemplate='Date: %{x}<br>Cumulative: $%{y:.2f}<extra></extra>'
                 ),
-                True,
-            ],
-        ],
-    )
+                row=1, col=1
+            )
+            
+            # Add markers for trades (green/red)
+            trades_df = df[~df['is_balance_op']]
+            if len(trades_df) > 0:
+                colors_trades = ['#06D6A0' if p > 0 else '#EF476F' for p in trades_df['profit']]
+                fig.add_trace(
+                    go.Scatter(
+                        x=trades_df['time'],
+                        y=trades_df['cumulative_profit'],
+                        mode='markers',
+                        name='Trades',
+                        marker=dict(size=8, color=colors_trades, opacity=0.7, line=dict(width=1, color='white')),
+                        text=[f"{row['symbol']}: ${row['profit']:.2f}" for _, row in trades_df.iterrows()],
+                        hovertemplate='%{text}<br>Time: %{x}<extra></extra>'
+                    ),
+                    row=1, col=1
+                )
+            
+            # Add markers for deposits/withdrawals (diamond shape)
+            balance_df = df[df['is_balance_op']]
+            if len(balance_df) > 0:
+                colors_balance = ['#118AB2' if p > 0 else '#FFD60A' for p in balance_df['profit']]
+                fig.add_trace(
+                    go.Scatter(
+                        x=balance_df['time'],
+                        y=balance_df['cumulative_profit'],
+                        mode='markers',
+                        name='Deposits/Withdrawals',
+                        marker=dict(size=12, color=colors_balance, opacity=0.9, symbol='diamond', line=dict(width=2, color='white')),
+                        text=[f"{row['type_name']}: ${row['profit']:.2f}" for _, row in balance_df.iterrows()],
+                        hovertemplate='%{text}<br>Time: %{x}<extra></extra>'
+                    ),
+                    row=1, col=1
+                )
+            
+            # Add bar chart for individual transactions
+            colors_bar = ['#06D6A0' if p > 0 else '#EF476F' if not is_bal else '#118AB2' if p > 0 else '#FFD60A'
+                          for p, is_bal in zip(df['profit'], df['is_balance_op'])]
+            
+            fig.add_trace(
+                go.Bar(
+                    x=df['time'],
+                    y=df['profit'],
+                    name='Profit/Loss',
+                    marker=dict(color=colors_bar, opacity=0.8),
+                    hovertemplate='%{x}<br>P&L: $%{y:.2f}<extra></extra>',
+                    showlegend=False
+                ),
+                row=2, col=1
+            )
+            
+            # Update layout - full width and auto-fit
+            fig.update_layout(
+                height=700,
+                hovermode='x unified',
+                template='plotly_white',
+                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+                margin=dict(l=50, r=50, t=80, b=50),
+                autosize=True,
+                xaxis=dict(automargin=True),
+                xaxis2=dict(automargin=True)
+            )
+            
+            fig.update_xaxes(title_text='Date', row=2, col=1)
+            fig.update_yaxes(title_text='Cumulative P&L ($)', row=1, col=1)
+            fig.update_yaxes(title_text='Transaction Amount ($)', row=2, col=1)
+            
+            # Summary stats
+            total_profit = df['profit'].sum()
+            total_trades = len(trades_df)
+            total_deposits = balance_df[balance_df['profit'] > 0]['profit'].sum() if len(balance_df) > 0 else 0
+            total_withdrawals = abs(balance_df[balance_df['profit'] < 0]['profit'].sum()) if len(balance_df) > 0 else 0
+            win_rate = (trades_df['profit'] > 0).sum() / len(trades_df) * 100 if len(trades_df) > 0 else 0
+            
+            # Explanation of missing markers
+            deposit_note = f"💎 **{len(balance_df[balance_df['profit'] > 0])} Deposits** found" if len(balance_df[balance_df['profit'] > 0]) > 0 else "⚠️ **No deposits** detected (entry type must be 2 with positive profit)"
+            withdrawal_note = f"💎 **{len(balance_df[balance_df['profit'] < 0])} Withdrawals** found" if len(balance_df[balance_df['profit'] < 0]) > 0 else "⚠️ **No withdrawals** detected (entry type must be 2 with negative profit)"
+            
+            summary = f"""
+**📊 Summary (Last {days} Days)**
+- **Total Trades:** {total_trades} (🟢 Green = Profit, 🔴 Red = Loss)
+- **Win Rate:** {win_rate:.1f}%
+- **Total Trading P&L:** ${total_profit:.2f}
+- {deposit_note}
+  - Total: ${total_deposits:.2f}
+- {withdrawal_note}
+  - Total: ${total_withdrawals:.2f}
 
-    # Combine into tabbed interface
-    demo = gr.TabbedInterface(
-        [query_interface, analysis_interface, execute_interface],
-        ["Query", "Analysis", "Execute"],
-        title="MT5 MCP Server",
-    )
+---
+**📖 Chart Explanation:**
+- **Top chart**: Cumulative P&L line shows your account growth over time
+  - Dots on the line = individual trades
+  - Diamond markers = deposits (blue) / withdrawals (yellow)
+- **Bottom chart**: Individual transaction bars show each trade/deposit/withdrawal amount
+  - Green bars = profitable trades
+  - Red bars = losing trades
+  - Blue bars = deposits
+  - Yellow bars = withdrawals
 
+⚠️ **Note:** MT5 marks deposits/withdrawals with `entry=2` deal type. If you don't see diamond markers, your account may not have any deposits/withdrawals in this period, or they're recorded differently by your broker.
+
+*Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
+"""
+            
+            return fig, summary
+            
+        except Exception as e:
+            return None, f"❌ Error: {str(e)}"
+    
+    def get_open_positions():
+        """Get open positions with real-time data."""
+        try:
+            import MetaTrader5 as mt5
+            import pandas as pd
+            
+            # Get MT5 connection
+            mt5_conn = get_connection()
+            if not mt5_conn.validate_connection():
+                return "❌ MT5 not connected", ""
+            
+            # Get open positions
+            positions = safe_mt5_call(mt5.positions_get)
+            total = safe_mt5_call(mt5.positions_total)
+            
+            if not positions or len(positions) == 0:
+                return f"📊 **Open Positions: 0**\n\n*No open positions*\n\n*Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*", ""
+            
+            # Convert to DataFrame
+            df = pd.DataFrame(list(positions), columns=positions[0]._asdict().keys())
+            df['time'] = pd.to_datetime(df['time'], unit='s')
+            df['type_str'] = df['type'].apply(lambda x: '🟢 BUY' if x == 0 else '🔴 SELL')
+            
+            # Calculate current P&L
+            total_profit = df['profit'].sum()
+            total_volume = df['volume'].sum()
+            
+            # Create HTML table
+            table_html = "<table style='width:100%; border-collapse: collapse;'>"
+            table_html += "<tr style='background-color: #f0f0f0; font-weight: bold;'>"
+            table_html += "<th style='padding: 8px; border: 1px solid #ddd;'>Symbol</th>"
+            table_html += "<th style='padding: 8px; border: 1px solid #ddd;'>Type</th>"
+            table_html += "<th style='padding: 8px; border: 1px solid #ddd;'>Volume</th>"
+            table_html += "<th style='padding: 8px; border: 1px solid #ddd;'>Open Price</th>"
+            table_html += "<th style='padding: 8px; border: 1px solid #ddd;'>Current Price</th>"
+            table_html += "<th style='padding: 8px; border: 1px solid #ddd;'>P&L</th>"
+            table_html += "<th style='padding: 8px; border: 1px solid #ddd;'>Time</th>"
+            table_html += "</tr>"
+            
+            for _, row in df.iterrows():
+                profit_color = '#06D6A0' if row['profit'] >= 0 else '#EF476F'
+                table_html += "<tr>"
+                table_html += f"<td style='padding: 8px; border: 1px solid #ddd;'>{row['symbol']}</td>"
+                table_html += f"<td style='padding: 8px; border: 1px solid #ddd;'>{row['type_str']}</td>"
+                table_html += f"<td style='padding: 8px; border: 1px solid #ddd;'>{row['volume']:.2f}</td>"
+                table_html += f"<td style='padding: 8px; border: 1px solid #ddd;'>{row['price_open']:.5f}</td>"
+                table_html += f"<td style='padding: 8px; border: 1px solid #ddd;'>{row['price_current']:.5f}</td>"
+                table_html += f"<td style='padding: 8px; border: 1px solid #ddd; color: {profit_color}; font-weight: bold;'>${row['profit']:.2f}</td>"
+                table_html += f"<td style='padding: 8px; border: 1px solid #ddd;'>{row['time'].strftime('%Y-%m-%d %H:%M')}</td>"
+                table_html += "</tr>"
+            
+            table_html += "</table>"
+            
+            # Summary
+            summary = f"""
+## 📊 Open Positions: {total}
+
+**Total Volume:** {total_volume:.2f} lots
+**Total Unrealized P&L:** ${total_profit:.2f}
+
+*Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
+"""
+            
+            return summary, table_html
+            
+        except Exception as e:
+            return f"❌ Error: {str(e)}", ""
+    
+    # Build Gradio interface with tabs
+    with gr.Blocks(title="MetaTrader 5 MCP Server") as demo:
+        gr.Markdown("# MetaTrader 5 MCP Server")
+        
+        with gr.Tabs():
+            # Tab 1: Status Dashboard
+            with gr.Tab("📊 Status"):
+                gr.Markdown(
+                    "Real-time status dashboard for the MT5 MCP server. "
+                    "Connect your MCP client to `/gradio_api/mcp/` to use the tools."
+                )
+                
+                status_output = gr.Markdown(get_server_status())
+                
+                refresh_btn = gr.Button("🔄 Refresh Status", variant="primary")
+                refresh_btn.click(fn=get_server_status, outputs=status_output)
+                
+                # Auto-refresh every 30 seconds
+                status_timer = gr.Timer(30)
+                status_timer.tick(fn=get_server_status, outputs=status_output)
+            
+            # Tab 2: Transaction History
+            with gr.Tab("💰 Transaction History"):
+                gr.Markdown("### Trading history with deposits/withdrawals")
+                gr.Markdown("🔹 **Green/Red dots** = Trades | 💎 **Blue/Yellow diamonds** = Deposits/Withdrawals")
+                
+                with gr.Row():
+                    date_range = gr.Radio(
+                        choices=[7, 30, 90, 180, 365],
+                        value=90,
+                        label="Time Range (Days)",
+                        info="Select how many days of history to display"
+                    )
+                    history_refresh_btn = gr.Button("🔄 Refresh History", variant="primary", scale=0)
+                
+                history_plot = gr.Plot(label="Transaction History")
+                history_summary = gr.Markdown()
+                
+                def update_history(days):
+                    fig, summary = get_transaction_history(days)
+                    return fig, summary
+                
+                # Update on button click or date range change
+                history_refresh_btn.click(fn=update_history, inputs=[date_range], outputs=[history_plot, history_summary])
+                date_range.change(fn=update_history, inputs=[date_range], outputs=[history_plot, history_summary])
+                
+                # Auto-refresh every 1 minute
+                history_timer = gr.Timer(60)
+                history_timer.tick(fn=lambda: update_history(date_range.value), outputs=[history_plot, history_summary])
+                
+                # Load initial data
+                demo.load(fn=lambda: update_history(90), outputs=[history_plot, history_summary])
+            
+            # Tab 3: Open Positions
+            with gr.Tab("📈 Open Positions"):
+                gr.Markdown("### Real-time open positions (Auto-refresh every 1 second)")
+                
+                positions_summary = gr.Markdown()
+                positions_table = gr.HTML()
+                
+                positions_refresh_btn = gr.Button("🔄 Refresh Positions", variant="primary")
+                
+                def update_positions():
+                    summary, table = get_open_positions()
+                    return summary, table
+                
+                positions_refresh_btn.click(fn=update_positions, outputs=[positions_summary, positions_table])
+                
+                # Auto-refresh every 1 second
+                positions_timer = gr.Timer(1)
+                positions_timer.tick(fn=update_positions, outputs=[positions_summary, positions_table])
+                
+                # Load initial data
+                demo.load(fn=update_positions, outputs=[positions_summary, positions_table])
+    
     return demo
 
 

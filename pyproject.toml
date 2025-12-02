@@ -52,6 +52,13 @@ dependencies = [
 ui = [
     "gradio[mcp]>=6.0.0"
 ]
+charting = [
+    "plotly>=5.18.0"
+]
+all = [
+    "gradio[mcp]>=6.0.0",
+    "plotly>=5.18.0"
+]
 
 [project.urls]
 Homepage = "https://github.com/Cloudmeru/Metatrader-5-MCP-Server"

@@ -42,19 +42,53 @@ class MT5Connection:
         self._safe_namespace: Optional[Dict[str, Any]] = None
         self._initialize()
 
-    def _initialize(self):
-        """Initialize connection to MT5 terminal with thread safety."""
-        with _mt5_lock:
-            if not mt5.initialize():
-                error = mt5.last_error()
-                logger.error(f"MT5 initialization failed: {error}")
-                raise RuntimeError(f"Failed to initialize MT5: {error}")
+    def _initialize(self, max_retries=3, retry_delay=1.0):
+        """Initialize connection to MT5 terminal with thread safety and retry logic.
+        
+        Args:
+            max_retries: Maximum number of initialization attempts
+            retry_delay: Delay in seconds between retries
+        """
+        import time
+        
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                with _mt5_lock:
+                    if not mt5.initialize():
+                        error = mt5.last_error()
+                        last_error = f"MT5 initialization failed (attempt {attempt + 1}/{max_retries}): {error}"
+                        logger.warning(last_error)
+                        
+                        if attempt < max_retries - 1:
+                            time.sleep(retry_delay)
+                            continue
+                        else:
+                            logger.error(f"All {max_retries} initialization attempts failed")
+                            raise RuntimeError(f"Failed to initialize MT5 after {max_retries} attempts: {error}")
 
-            self._initialized = True
-            logger.info("MT5 connection initialized successfully")
+                    self._initialized = True
+                    logger.info(f"MT5 connection initialized successfully on attempt {attempt + 1}")
+                    break
+                    
+            except RuntimeError:
+                raise
+            except Exception as e:
+                last_error = f"Unexpected error during MT5 initialization: {str(e)}"
+                logger.error(last_error, exc_info=True)
+                
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    raise RuntimeError(f"Failed to initialize MT5 after {max_retries} attempts: {str(e)}") from e
 
         # Build safe namespace with read-only functions
-        self._safe_namespace = self._build_safe_namespace()
+        try:
+            self._safe_namespace = self._build_safe_namespace()
+        except Exception as e:
+            logger.error(f"Failed to build safe namespace: {e}", exc_info=True)
+            raise RuntimeError(f"Failed to build execution namespace: {str(e)}") from e
 
     def _build_safe_namespace(self) -> Dict[str, Any]:
         """Build namespace with only read-only MT5 functions and helpers."""
@@ -66,6 +100,15 @@ class MT5Connection:
         matplotlib.use("Agg")  # Non-interactive backend for server use
         import matplotlib.pyplot as plt
         import ta
+        
+        try:
+            import plotly.express as px
+            import plotly.graph_objects as go
+            plotly_available = True
+        except ImportError:
+            px = None
+            go = None
+            plotly_available = False
 
         # Whitelist read-only MT5 functions
         safe_mt5_funcs = {
@@ -85,6 +128,11 @@ class MT5Connection:
             "account_info": mt5.account_info,
             "terminal_info": mt5.terminal_info,
             "version": mt5.version,
+            # Trading history (read-only)
+            "history_deals_get": mt5.history_deals_get,
+            "history_orders_get": mt5.history_orders_get,
+            "positions_get": mt5.positions_get,
+            "positions_total": mt5.positions_total,
             # Timeframe constants
             "TIMEFRAME_M1": mt5.TIMEFRAME_M1,
             "TIMEFRAME_M2": mt5.TIMEFRAME_M2,
@@ -140,6 +188,12 @@ class MT5Connection:
             "matplotlib": matplotlib,
             "ta": ta,
         }
+        
+        # Add plotly if available
+        if plotly_available:
+            namespace["px"] = px
+            namespace["go"] = go
+            namespace["plotly"] = __import__("plotly")
 
         return namespace
 

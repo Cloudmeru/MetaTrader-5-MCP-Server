@@ -99,6 +99,16 @@ OPERATION_MAP = {
 def _prepare_operation_params(request: MT5QueryRequest) -> Dict[str, Any]:
     """Build and validate parameters for an MT5 operation."""
 
+    # Validate request
+    if not request:
+        raise MT5ValidationError("Request cannot be None")
+
+    # Validate parameters is dict or None
+    if request.parameters is not None and not isinstance(request.parameters, dict):
+        raise MT5ValidationError(
+            f"Parameters must be a dictionary or None, got {type(request.parameters).__name__}"
+        )
+
     params = request.parameters.copy() if request.parameters is not None else {}
 
     if request.symbol:
@@ -140,6 +150,10 @@ def _invoke_mt5_operation(
     from .connection import safe_mt5_call
 
     logger.info("Executing %s with params: %s", operation_name, params)
+
+    # Validate params is a dictionary
+    if not isinstance(params, dict):
+        raise MT5ValidationError(f"Parameters must be a dictionary, got {type(params).__name__}")
 
     try:
         if operation_name == "copy_rates_from_pos":
@@ -291,11 +305,25 @@ def handle_mt5_query(request: MT5QueryRequest) -> MT5QueryResponse:
         >>> request = MT5QueryRequest(operation=MT5Operation.ACCOUNT_INFO)
         >>> response = handle_mt5_query(request)
     """
+    try:
+        # Validate request object
+        if not request:
+            raise MT5ValidationError("Request cannot be None")
 
-    operation_name = request.operation.value
-    params = _prepare_operation_params(request)
+        if not hasattr(request, 'operation') or not request.operation:
+            raise MT5ValidationError("Request must have a valid operation")
 
-    mt5_func = OPERATION_MAP.get(operation_name)
+        operation_name = request.operation.value
+        params = _prepare_operation_params(request)
+
+        mt5_func = OPERATION_MAP.get(operation_name)
+    except (MT5ValidationError, MT5SymbolNotFoundError) as e:
+        # Re-raise custom errors
+        raise
+    except Exception as e:
+        # Wrap unexpected errors
+        logger.error(f"Error preparing query: {e}", exc_info=True)
+        raise MT5ValidationError(f"Failed to prepare query: {str(e)}") from e
     if mt5_func is None:
         raise MT5OperationError(
             operation_name,
@@ -353,10 +381,27 @@ def handle_mt5_analysis(request: MT5AnalysisRequest) -> MT5AnalysisResponse:
         ... )
         >>> handle_mt5_analysis(request)
     """
+    try:
+        # Validate request object
+        if not request:
+            raise MT5ValidationError("Request cannot be None")
 
-    logger.info("Execute MT5 analysis: query + indicators + chart + optional forecast")
+        if not hasattr(request, 'query') or not request.query:
+            raise MT5ValidationError("Request must have a valid query")
 
-    query_response = handle_mt5_query(request.query)
+        logger.info("Execute MT5 analysis: query + indicators + chart + optional forecast")
+
+        query_response = handle_mt5_query(request.query)
+    except (MT5ValidationError, MT5DataError, MT5CalculationError) as e:
+        # Re-raise custom errors
+        raise
+    except Exception as e:
+        # Wrap unexpected errors
+        logger.error(f"Error in analysis setup: {e}", exc_info=True)
+        raise MT5CalculationError(
+            f"Failed to initialize analysis: {str(e)}",
+            "Check request parameters and MT5 connection"
+        ) from e
     if isinstance(query_response.data, list):
         df = pd.DataFrame(query_response.data)
     elif isinstance(query_response.data, dict):

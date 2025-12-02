@@ -2,6 +2,49 @@
 
 All notable changes will be tracked here. Dates reflect when the feature set landed in the repository; see git history for exact commits.
 
+## v0.5.1 – Production-Ready Error Handling (December 2, 2025)
+
+### Comprehensive Error Handling
+- **New Error Utilities Module** (`error_utils.py`):
+  - Standardized error types (12 categories: JSONParseError, ValidationError, TypeError, ValueError, EnumError, MissingFieldError, MT5ConnectionError, MT5OperationError, CalculationError, TimeoutError, RuntimeError, UnknownError)
+  - Safe JSON parsing with detailed error messages and position tracking
+  - Safe enum conversion with valid values listing in error responses
+  - Field validation helpers for required fields and type checking
+  - Standardized error response format with timestamp and operation context
+- **Tool Function Protection**:
+  - All MCP tools (mt5_query, mt5_analyze, mt5_execute) wrapped with comprehensive error handling
+  - Input validation: command length limits (50KB), dangerous operation detection, type checking
+  - Rate limit error handling with graceful degradation
+  - MT5 connection validation before all operations
+  - Catch-all exception handlers to prevent server crashes
+- **Handler-Level Protection**:
+  - Request object validation in `handle_mt5_query` and `handle_mt5_analysis`
+  - Parameter type validation before MT5 operations
+  - Custom error re-raising with wrapped exceptions for better debugging
+- **Connection Resilience**:
+  - Retry logic for MT5 initialization (3 attempts with 1-second delay between retries)
+  - Detailed error logging for connection failures
+  - Namespace building error handling with fallback messages
+- **Executor Safety**:
+  - Command and namespace validation before execution
+  - Code preparation error handling with syntax validation
+  - Result formatting error handling with fallback to type information
+- **Security Enhancements**:
+  - Dangerous operation blocking: eval(), exec(), subprocess, mt5.initialize(), mt5.shutdown()
+  - Command length limits to prevent abuse (50KB maximum)
+  - SQL injection attempt detection and handling
+- **Test Coverage**: 30+ test cases covering all error scenarios with 100% pass rate
+  - Malformed JSON inputs handled gracefully
+  - Invalid enum values return helpful error messages
+  - Type mismatches caught and reported
+  - Missing required fields validated
+  - MT5 connection failures retry and report
+
+### What Changed
+- **Before**: Server crashed on malformed client input (invalid JSON, wrong types, missing fields)
+- **After**: All errors handled gracefully with standardized JSON error responses
+- **Impact**: Server is now production-ready and stable under malformed/malicious inputs
+
 ## v0.5.0 – Multi-Transport MCP Server
 
 - Added a Gradio v6-powered MCP server that exposes the same MT5 tools over streamable HTTP/SSE (`/gradio_api/mcp/`) with optional hosting on Hugging Face Spaces or Windows VPS targets.

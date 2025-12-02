@@ -169,6 +169,13 @@ def execute_command(command: str, namespace: Dict[str, Any], show_traceback: boo
         ... '''
         >>> execute_command(command, namespace)
     """
+    # Validate inputs
+    if not command or not isinstance(command, str):
+        raise MT5ValidationError(f"Command must be a non-empty string, got {type(command).__name__}")
+    
+    if not namespace or not isinstance(namespace, dict):
+        raise MT5ValidationError(f"Namespace must be a dictionary, got {type(namespace).__name__}")
+    
     logger.info(f"Executing command: {command[:100]}...")
 
     # Capture stdout
@@ -179,7 +186,14 @@ def execute_command(command: str, namespace: Dict[str, Any], show_traceback: boo
     error = None
 
     try:
-        code_obj, capture_expression = _prepare_code(command)
+        # Prepare and compile code with error handling
+        try:
+            code_obj, capture_expression = _prepare_code(command)
+        except MT5ValidationError:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to prepare code: {e}", exc_info=True)
+            raise MT5ValidationError(f"Failed to compile command: {str(e)}") from e
         namespace.setdefault("__name__", "__main__")
         namespace.pop("__mt5_exec_result", None)
         runpy._run_code(
@@ -221,9 +235,14 @@ def execute_command(command: str, namespace: Dict[str, Any], show_traceback: boo
         response_parts.append(output.strip())
 
     if result is not None:
-        formatted_result = format_result(result)
-        if formatted_result:
-            response_parts.append(formatted_result)
+        try:
+            formatted_result = format_result(result)
+            if formatted_result:
+                response_parts.append(formatted_result)
+        except Exception as e:
+            logger.error(f"Failed to format result: {e}", exc_info=True)
+            response_parts.append(f"Warning: Could not format result: {str(e)}")
+            response_parts.append(f"Raw result type: {type(result).__name__}")
 
     if not response_parts:
         return "Command executed successfully (no output)"

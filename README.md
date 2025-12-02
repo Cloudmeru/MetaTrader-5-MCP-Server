@@ -34,8 +34,10 @@ mt5-mcp --transport both
 ## Key Capabilities
 
 - **Read-only MT5 bridge** – Safe namespace exposes only data-retrieval APIs and blocks all trading calls.
+- **Transaction history access** – Retrieve and analyze trading history with `history_deals_get`, `history_orders_get`, and `positions_get`.
 - **Multiple interaction models** – Write Python (`execute_mt5`), submit structured MT5 queries (`mt5_query`), or run full analyses with indicators, charts, and forecasts (`mt5_analyze`).
 - **Technical analysis toolkit** – `ta`, `numpy`, and `matplotlib` ship in the namespace for RSI, MACD, Bollinger Bands, multi-panel charts, and more.
+- **Interactive charting** – Optional Plotly support (`px`, `go`) for creating interactive HTML charts from market data and trading history.
 - **Forecasting + ML signals** – Prophet forecasting and optional XGBoost buy/sell predictions with confidence scoring.
 - **LLM-friendly guardrails** – Clear tool descriptions, runtime validation, and result-assignment reminders keep assistant output predictable.
 
@@ -99,12 +101,20 @@ cd MT5-MCP
 pip install -e .
 ```
 
-Need the HTTP transport? Include the extra Gradio dependency:
+Optional features (HTTP transport and interactive charting):
 
 ```powershell
+# Install with HTTP/Gradio support
 pip install -e .[ui]
-# or when installing from PyPI
-pip install "mt5-mcp[ui]"
+
+# Install with Plotly for interactive charts
+pip install -e .[charting]
+
+# Install everything
+pip install -e .[all]
+
+# From PyPI:
+pip install "mt5-mcp[all]"
 ```
 
 **Package naming:** The package is named `mt5-mcp` (with hyphen) on PyPI, but the Python module uses `mt5_mcp` (with underscore). This is standard Python convention.

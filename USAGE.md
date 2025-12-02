@@ -112,7 +112,8 @@ mt5-mcp --transport both --host 0.0.0.0 --port 7860 --rate-limit 20
 | `pd` / `pandas` | DataFrame manipulation |
 | `np` / `numpy` | Numerical helpers |
 | `ta` | Technical analysis indicators |
-| `plt` / `matplotlib` | Charting APIs |
+| `plt` / `matplotlib` | Static charting APIs |
+| `px` / `go` / `plotly` | Interactive Plotly charts (if installed) |
 
 ⚠️ **Guardrails**: The server already initializes MT5. Never call `mt5.initialize()` or `mt5.shutdown()`, and always assign your final output to `result` (or another documented variable) so responses are captured.
 
@@ -273,12 +274,113 @@ result = df[['time', 'close', 'return']].tail(10)
 
 The following read-only calls are supported in both `execute_mt5` and `mt5_query`:
 
-- `copy_rates`, `copy_rates_from`, `copy_rates_from_pos`, `copy_rates_range`
-- `copy_ticks_from`, `copy_ticks_range`
-- `symbol_info`, `symbol_info_tick`, `symbol_select`, `symbols_get`, `symbols_total`
-- `account_info`, `terminal_info`, `version`
-- `order_calc_profit`, `order_calc_margin`
-- Timeframe constants: `TIMEFRAME_M1`, `M5`, `M15`, `M30`, `H1`, `H4`, `D1`, `W1`, `MN1`
+- **Market Data:** `copy_rates`, `copy_rates_from`, `copy_rates_from_pos`, `copy_rates_range`, `copy_ticks_from`, `copy_ticks_range`
+- **Symbol Info:** `symbol_info`, `symbol_info_tick`, `symbol_select`, `symbols_get`, `symbols_total`
+- **Account Info:** `account_info`, `terminal_info`, `version`
+- **Trading History:** `history_deals_get`, `history_orders_get`, `positions_get`, `positions_total`
+- **Calculations:** `order_calc_profit`, `order_calc_margin`
+- **Timeframe constants:** `TIMEFRAME_M1`, `M5`, `M15`, `M30`, `H1`, `H4`, `D1`, `W1`, `MN1`
+
+### Transaction History Examples
+
+```python
+# Get all deals from the last 30 days
+from datetime import datetime, timedelta
+start_date = datetime.now() - timedelta(days=30)
+deals = mt5.history_deals_get(start_date, datetime.now())
+if deals:
+    df = pd.DataFrame(deals, columns=deals[0]._asdict().keys())
+    result = df[['time', 'symbol', 'type', 'volume', 'price', 'profit']]
+else:
+    result = "No deals found"
+```
+
+```python
+# Create interactive Plotly chart from transaction history
+from datetime import datetime, timedelta
+
+# Get deals from last 90 days
+start_date = datetime.now() - timedelta(days=90)
+deals = mt5.history_deals_get(start_date, datetime.now())
+
+if deals and len(deals) > 0:
+    df = pd.DataFrame(deals, columns=deals[0]._asdict().keys())
+    df['time'] = pd.to_datetime(df['time'], unit='s')
+    df['cumulative_profit'] = df['profit'].cumsum()
+    
+    # Create interactive Plotly chart
+    fig = go.Figure()
+    
+    # Add cumulative profit line
+    fig.add_trace(go.Scatter(
+        x=df['time'], 
+        y=df['cumulative_profit'],
+        mode='lines',
+        name='Cumulative P&L',
+        line=dict(color='blue', width=2)
+    ))
+    
+    # Add individual trade markers (colored by profit/loss)
+    colors = ['green' if p > 0 else 'red' for p in df['profit']]
+    fig.add_trace(go.Scatter(
+        x=df['time'],
+        y=df['cumulative_profit'],
+        mode='markers',
+        name='Trades',
+        marker=dict(size=8, color=colors, opacity=0.6),
+        text=[f"{row['symbol']}: ${row['profit']:.2f}" for _, row in df.iterrows()],
+        hovertemplate='%{text}<br>Time: %{x}<br>Cumulative: $%{y:.2f}<extra></extra>'
+    ))
+    
+    fig.update_layout(
+        title='Trading Performance - Cumulative P&L',
+        xaxis_title='Date',
+        yaxis_title='Cumulative Profit ($)',
+        hovermode='closest',
+        template='plotly_white'
+    )
+    
+    fig.write_html('trading_history.html')
+    result = f"📊 Interactive chart saved: trading_history.html\nTotal trades: {len(df)}, Total P&L: ${df['profit'].sum():.2f}"
+else:
+    result = "No trading history found"
+```
+
+```python
+# Analyze trading performance by symbol
+from datetime import datetime, timedelta
+
+start_date = datetime.now() - timedelta(days=60)
+deals = mt5.history_deals_get(start_date, datetime.now())
+
+if deals:
+    df = pd.DataFrame(deals, columns=deals[0]._asdict().keys())
+    
+    # Group by symbol
+    summary = df.groupby('symbol').agg({
+        'profit': ['sum', 'mean', 'count'],
+        'volume': 'sum'
+    }).round(2)
+    
+    summary.columns = ['Total P&L', 'Avg P&L', 'Trades', 'Total Volume']
+    summary = summary.sort_values('Total P&L', ascending=False)
+    
+    # Create bar chart with Plotly
+    fig = px.bar(
+        summary.reset_index(),
+        x='symbol',
+        y='Total P&L',
+        color='Total P&L',
+        color_continuous_scale=['red', 'yellow', 'green'],
+        title='Profit/Loss by Symbol',
+        labels={'Total P&L': 'Total Profit/Loss ($)'}
+    )
+    fig.write_html('symbol_performance.html')
+    
+    result = f"📊 Chart saved: symbol_performance.html\n\n{summary.to_string()}"
+else:
+    result = "No deals found"
+```
 
 ## 8. Troubleshooting & Logging
 
