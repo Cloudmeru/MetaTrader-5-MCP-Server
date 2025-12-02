@@ -171,11 +171,13 @@ def execute_command(command: str, namespace: Dict[str, Any], show_traceback: boo
     """
     # Validate inputs
     if not command or not isinstance(command, str):
-        raise MT5ValidationError(f"Command must be a non-empty string, got {type(command).__name__}")
-    
+        raise MT5ValidationError(
+            f"Command must be a non-empty string, got {type(command).__name__}"
+        )
+
     if not namespace or not isinstance(namespace, dict):
         raise MT5ValidationError(f"Namespace must be a dictionary, got {type(namespace).__name__}")
-    
+
     logger.info(f"Executing command: {command[:100]}...")
 
     # Capture stdout

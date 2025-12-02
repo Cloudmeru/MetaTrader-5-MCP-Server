@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class ErrorType(str, Enum):
     """Standardized error type categories."""
-    
+
     JSON_PARSE_ERROR = "JSONParseError"
     VALIDATION_ERROR = "ValidationError"
     TYPE_ERROR = "TypeError"
@@ -38,13 +38,13 @@ def create_error_response(
 ) -> Dict[str, Any]:
     """
     Create standardized error response dictionary.
-    
+
     Args:
         error_type: ErrorType enum value
         error_message: Human-readable error description
         operation: Operation that failed (optional)
         details: Additional context about the error (optional)
-        
+
     Returns:
         Dictionary with standardized error structure
     """
@@ -54,13 +54,13 @@ def create_error_response(
         "error_type": error_type.value,
         "timestamp": datetime.utcnow().isoformat(),
     }
-    
+
     if operation:
         response["operation"] = operation
-        
+
     if details:
         response["error_details"] = details
-        
+
     return response
 
 
@@ -71,12 +71,12 @@ def create_success_response(
 ) -> Dict[str, Any]:
     """
     Create standardized success response dictionary.
-    
+
     Args:
         data: Response data
         operation: Operation that succeeded (optional)
         metadata: Additional response metadata (optional)
-        
+
     Returns:
         Dictionary with standardized success structure
     """
@@ -85,13 +85,13 @@ def create_success_response(
         "data": data,
         "timestamp": datetime.utcnow().isoformat(),
     }
-    
+
     if operation:
         response["operation"] = operation
-        
+
     if metadata:
         response["metadata"] = metadata
-        
+
     return response
 
 
@@ -102,19 +102,19 @@ def safe_json_parse(
 ) -> tuple[Optional[Any], Optional[Dict[str, Any]]]:
     """
     Safely parse JSON string with error handling.
-    
+
     Args:
         json_string: JSON string to parse
         field_name: Name of the field being parsed (for error messages)
         default: Default value to return on error
-        
+
     Returns:
         Tuple of (parsed_value, error_dict). If successful, error_dict is None.
         If failed, parsed_value is default and error_dict contains error info.
     """
     if not json_string or not json_string.strip():
         return default, None
-        
+
     try:
         parsed = json.loads(json_string)
         return parsed, None
@@ -128,16 +128,14 @@ def safe_json_parse(
                 "field": field_name,
                 "input": json_string[:100] + "..." if len(json_string) > 100 else json_string,
                 "position": getattr(e, "pos", None),
-            }
+            },
         )
         return default, error_dict
     except Exception as e:
         error_msg = f"Unexpected error parsing {field_name}: {str(e)}"
         logger.error(error_msg, exc_info=True)
         error_dict = create_error_response(
-            ErrorType.UNKNOWN_ERROR,
-            error_msg,
-            details={"field": field_name}
+            ErrorType.UNKNOWN_ERROR, error_msg, details={"field": field_name}
         )
         return default, error_dict
 
@@ -149,12 +147,12 @@ def safe_enum_conversion(
 ) -> tuple[Optional[Enum], Optional[Dict[str, Any]]]:
     """
     Safely convert string to enum with error handling.
-    
+
     Args:
         value: String value to convert
         enum_class: Enum class to convert to
         field_name: Name of the field being converted (for error messages)
-        
+
     Returns:
         Tuple of (enum_value, error_dict). If successful, error_dict is None.
         If failed, enum_value is None and error_dict contains error info.
@@ -162,7 +160,7 @@ def safe_enum_conversion(
     try:
         enum_value = enum_class(value)
         return enum_value, None
-    except ValueError as e:
+    except ValueError:
         valid_values = [e.value for e in enum_class]
         error_msg = f"Invalid {field_name} '{value}'. Valid values: {', '.join(valid_values)}"
         logger.warning(error_msg)
@@ -173,16 +171,14 @@ def safe_enum_conversion(
                 "field": field_name,
                 "invalid_value": value,
                 "valid_values": valid_values,
-            }
+            },
         )
         return None, error_dict
     except Exception as e:
         error_msg = f"Unexpected error converting {field_name}: {str(e)}"
         logger.error(error_msg, exc_info=True)
         error_dict = create_error_response(
-            ErrorType.UNKNOWN_ERROR,
-            error_msg,
-            details={"field": field_name}
+            ErrorType.UNKNOWN_ERROR, error_msg, details={"field": field_name}
         )
         return None, error_dict
 
@@ -193,11 +189,11 @@ def validate_required_field(
 ) -> Optional[Dict[str, Any]]:
     """
     Validate that a required field has a value.
-    
+
     Args:
         value: Field value to check
         field_name: Name of the field
-        
+
     Returns:
         Error dict if validation fails, None if successful
     """
@@ -205,9 +201,7 @@ def validate_required_field(
         error_msg = f"Missing required field: {field_name}"
         logger.warning(error_msg)
         return create_error_response(
-            ErrorType.MISSING_FIELD,
-            error_msg,
-            details={"field": field_name}
+            ErrorType.MISSING_FIELD, error_msg, details={"field": field_name}
         )
     return None
 
@@ -219,12 +213,12 @@ def validate_type(
 ) -> Optional[Dict[str, Any]]:
     """
     Validate that a value has the expected type.
-    
+
     Args:
         value: Value to check
         expected_type: Expected type
         field_name: Name of the field
-        
+
     Returns:
         Error dict if validation fails, None if successful
     """
@@ -241,7 +235,7 @@ def validate_type(
                 "field": field_name,
                 "expected_type": expected_type.__name__,
                 "actual_type": type(value).__name__,
-            }
+            },
         )
     return None
 
@@ -254,32 +248,33 @@ def safe_dict_get(
 ) -> tuple[Any, Optional[Dict[str, Any]]]:
     """
     Safely get value from dictionary with type validation.
-    
+
     Args:
         dictionary: Dictionary to get value from
         key: Key to retrieve
         default: Default value if key not found
         expected_type: Expected type for validation (optional)
-        
+
     Returns:
         Tuple of (value, error_dict). If successful, error_dict is None.
     """
     value = dictionary.get(key, default)
-    
+
     if expected_type and value is not None:
         error_dict = validate_type(value, expected_type, key)
         if error_dict:
             return default, error_dict
-            
+
     return value, None
 
 
 def wrap_with_error_handling(func):
     """
     Decorator to wrap functions with standardized error handling.
-    
+
     Catches all exceptions and returns standardized error responses.
     """
+
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
@@ -287,7 +282,7 @@ def wrap_with_error_handling(func):
             func_name = func.__name__
             error_msg = f"Error in {func_name}: {str(e)}"
             logger.error(error_msg, exc_info=True)
-            
+
             # Determine error type
             if "json" in str(e).lower():
                 error_type = ErrorType.JSON_PARSE_ERROR
@@ -299,17 +294,17 @@ def wrap_with_error_handling(func):
                 error_type = ErrorType.TIMEOUT_ERROR
             else:
                 error_type = ErrorType.RUNTIME_ERROR
-                
+
             return json.dumps(
                 create_error_response(
                     error_type,
                     error_msg,
                     operation=func_name,
-                    details={"exception": type(e).__name__}
+                    details={"exception": type(e).__name__},
                 ),
-                default=str
+                default=str,
             )
-    
+
     wrapper.__name__ = func.__name__
     wrapper.__doc__ = func.__doc__
     return wrapper
@@ -319,33 +314,33 @@ def safe_operation_execution(
     operation_func,
     operation_name: str,
     error_type_map: Optional[Dict[type, ErrorType]] = None,
-    **kwargs
+    **kwargs,
 ) -> tuple[Any, Optional[Dict[str, Any]]]:
     """
     Execute an operation with comprehensive error handling.
-    
+
     Args:
         operation_func: Function to execute
         operation_name: Name of the operation (for error messages)
         error_type_map: Mapping of exception types to ErrorType enums
         **kwargs: Arguments to pass to operation_func
-        
+
     Returns:
         Tuple of (result, error_dict). If successful, error_dict is None.
     """
     if error_type_map is None:
         error_type_map = {}
-        
+
     try:
         result = operation_func(**kwargs)
         return result, None
     except Exception as e:
         # Map exception to error type
         error_type = error_type_map.get(type(e), ErrorType.RUNTIME_ERROR)
-        
+
         error_msg = f"Operation '{operation_name}' failed: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        
+
         error_dict = create_error_response(
             error_type,
             error_msg,
@@ -353,7 +348,7 @@ def safe_operation_execution(
             details={
                 "exception_type": type(e).__name__,
                 "exception_message": str(e),
-            }
+            },
         )
         return None, error_dict
 
@@ -361,10 +356,10 @@ def safe_operation_execution(
 def format_json_response(response_dict: Dict[str, Any]) -> str:
     """
     Format response dictionary as JSON string with safe serialization.
-    
+
     Args:
         response_dict: Dictionary to serialize
-        
+
     Returns:
         JSON string
     """
@@ -376,6 +371,6 @@ def format_json_response(response_dict: Dict[str, Any]) -> str:
         fallback = create_error_response(
             ErrorType.RUNTIME_ERROR,
             "Failed to serialize response",
-            details={"original_error": str(e)}
+            details={"original_error": str(e)},
         )
         return json.dumps(fallback, default=str)

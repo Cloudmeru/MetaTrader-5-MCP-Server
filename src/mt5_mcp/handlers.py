@@ -310,14 +310,14 @@ def handle_mt5_query(request: MT5QueryRequest) -> MT5QueryResponse:
         if not request:
             raise MT5ValidationError("Request cannot be None")
 
-        if not hasattr(request, 'operation') or not request.operation:
+        if not hasattr(request, "operation") or not request.operation:
             raise MT5ValidationError("Request must have a valid operation")
 
         operation_name = request.operation.value
         params = _prepare_operation_params(request)
 
         mt5_func = OPERATION_MAP.get(operation_name)
-    except (MT5ValidationError, MT5SymbolNotFoundError) as e:
+    except (MT5ValidationError, MT5SymbolNotFoundError):
         # Re-raise custom errors
         raise
     except Exception as e:
@@ -386,13 +386,13 @@ def handle_mt5_analysis(request: MT5AnalysisRequest) -> MT5AnalysisResponse:
         if not request:
             raise MT5ValidationError("Request cannot be None")
 
-        if not hasattr(request, 'query') or not request.query:
+        if not hasattr(request, "query") or not request.query:
             raise MT5ValidationError("Request must have a valid query")
 
         logger.info("Execute MT5 analysis: query + indicators + chart + optional forecast")
 
         query_response = handle_mt5_query(request.query)
-    except (MT5ValidationError, MT5DataError, MT5CalculationError) as e:
+    except (MT5ValidationError, MT5DataError, MT5CalculationError):
         # Re-raise custom errors
         raise
     except Exception as e:
@@ -400,7 +400,7 @@ def handle_mt5_analysis(request: MT5AnalysisRequest) -> MT5AnalysisResponse:
         logger.error(f"Error in analysis setup: {e}", exc_info=True)
         raise MT5CalculationError(
             f"Failed to initialize analysis: {str(e)}",
-            "Check request parameters and MT5 connection"
+            "Check request parameters and MT5 connection",
         ) from e
     if isinstance(query_response.data, list):
         df = pd.DataFrame(query_response.data)

@@ -44,44 +44,51 @@ class MT5Connection:
 
     def _initialize(self, max_retries=3, retry_delay=1.0):
         """Initialize connection to MT5 terminal with thread safety and retry logic.
-        
+
         Args:
             max_retries: Maximum number of initialization attempts
             retry_delay: Delay in seconds between retries
         """
         import time
-        
+
         last_error = None
         for attempt in range(max_retries):
             try:
                 with _mt5_lock:
                     if not mt5.initialize():
                         error = mt5.last_error()
-                        last_error = f"MT5 initialization failed (attempt {attempt + 1}/{max_retries}): {error}"
+                        last_error = (
+                            "MT5 initialization failed (attempt "
+                            f"{attempt + 1}/{max_retries}): {error}"
+                        )
                         logger.warning(last_error)
-                        
+
                         if attempt < max_retries - 1:
                             time.sleep(retry_delay)
                             continue
-                        else:
-                            logger.error(f"All {max_retries} initialization attempts failed")
-                            raise RuntimeError(f"Failed to initialize MT5 after {max_retries} attempts: {error}")
+
+                        logger.error("All %s initialization attempts failed", max_retries)
+                        raise RuntimeError(
+                            "Failed to initialize MT5 after " f"{max_retries} attempts: {error}"
+                        )
 
                     self._initialized = True
                     logger.info(f"MT5 connection initialized successfully on attempt {attempt + 1}")
                     break
-                    
+
             except RuntimeError:
                 raise
             except Exception as e:
                 last_error = f"Unexpected error during MT5 initialization: {str(e)}"
                 logger.error(last_error, exc_info=True)
-                
+
                 if attempt < max_retries - 1:
                     time.sleep(retry_delay)
                     continue
-                else:
-                    raise RuntimeError(f"Failed to initialize MT5 after {max_retries} attempts: {str(e)}") from e
+
+                raise RuntimeError(
+                    "Failed to initialize MT5 after " f"{max_retries} attempts: {str(e)}"
+                ) from e
 
         # Build safe namespace with read-only functions
         try:
@@ -100,10 +107,11 @@ class MT5Connection:
         matplotlib.use("Agg")  # Non-interactive backend for server use
         import matplotlib.pyplot as plt
         import ta
-        
+
         try:
             import plotly.express as px
             import plotly.graph_objects as go
+
             plotly_available = True
         except ImportError:
             px = None
@@ -188,7 +196,7 @@ class MT5Connection:
             "matplotlib": matplotlib,
             "ta": ta,
         }
-        
+
         # Add plotly if available
         if plotly_available:
             namespace["px"] = px

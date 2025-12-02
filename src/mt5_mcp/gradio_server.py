@@ -275,7 +275,7 @@ def mt5_analyze_tool(  # pylint: disable=too-many-arguments, too-many-locals
                     create_error_response(
                         ErrorType.RUNTIME_ERROR,
                         f"Rate limit check failed: {str(e)}",
-                        operation="rate_limit_check"
+                        operation="rate_limit_check",
                     )
                 )
 
@@ -285,7 +285,7 @@ def mt5_analyze_tool(  # pylint: disable=too-many-arguments, too-many-locals
                 create_error_response(
                     ErrorType.VALIDATION_ERROR,
                     "query_operation must be a non-empty string",
-                    operation="mt5_analyze"
+                    operation="mt5_analyze",
                 )
             )
 
@@ -294,7 +294,7 @@ def mt5_analyze_tool(  # pylint: disable=too-many-arguments, too-many-locals
                 create_error_response(
                     ErrorType.VALIDATION_ERROR,
                     "query_symbol must be a non-empty string",
-                    operation="mt5_analyze"
+                    operation="mt5_analyze",
                 )
             )
 
@@ -307,7 +307,7 @@ def mt5_analyze_tool(  # pylint: disable=too-many-arguments, too-many-locals
                 create_error_response(
                     ErrorType.MT5_CONNECTION,
                     f"Failed to connect to MT5: {str(e)}",
-                    operation="mt5_analyze"
+                    operation="mt5_analyze",
                 )
             )
 
@@ -322,19 +322,20 @@ def mt5_analyze_tool(  # pylint: disable=too-many-arguments, too-many-locals
         if parse_error:
             return format_json_response(parse_error)
 
-        chart_panels_list, parse_error = safe_json_parse(
-            chart_panels, "chart_panels", default=None
-        )
+        chart_panels_list, parse_error = safe_json_parse(chart_panels, "chart_panels", default=None)
         if parse_error:
             return format_json_response(parse_error)
 
         # Validate parameter types
         if not isinstance(query_params_dict, dict):
+            message = (
+                "query_parameters must be a JSON object, got " f"{type(query_params_dict).__name__}"
+            )
             return format_json_response(
                 create_error_response(
                     ErrorType.TYPE_ERROR,
-                    f"query_parameters must be a JSON object, got {type(query_params_dict).__name__}",
-                    operation="mt5_analyze"
+                    message,
+                    operation="mt5_analyze",
                 )
             )
 
@@ -343,7 +344,7 @@ def mt5_analyze_tool(  # pylint: disable=too-many-arguments, too-many-locals
                 create_error_response(
                     ErrorType.TYPE_ERROR,
                     f"indicators must be a JSON array, got {type(indicators_list).__name__}",
-                    operation="mt5_analyze"
+                    operation="mt5_analyze",
                 )
             )
 
@@ -352,7 +353,7 @@ def mt5_analyze_tool(  # pylint: disable=too-many-arguments, too-many-locals
                 create_error_response(
                     ErrorType.TYPE_ERROR,
                     f"chart_panels must be a JSON array, got {type(chart_panels_list).__name__}",
-                    operation="mt5_analyze"
+                    operation="mt5_analyze",
                 )
             )
 
@@ -376,7 +377,7 @@ def mt5_analyze_tool(  # pylint: disable=too-many-arguments, too-many-locals
                 create_error_response(
                     ErrorType.VALIDATION_ERROR,
                     f"Invalid query request: {str(e)}",
-                    operation="mt5_analyze"
+                    operation="mt5_analyze",
                 )
             )
 
@@ -398,7 +399,7 @@ def mt5_analyze_tool(  # pylint: disable=too-many-arguments, too-many-locals
                     create_error_response(
                         ErrorType.VALIDATION_ERROR,
                         f"Invalid indicator specification: {str(e)}",
-                        operation="mt5_analyze"
+                        operation="mt5_analyze",
                     )
                 )
 
@@ -425,7 +426,7 @@ def mt5_analyze_tool(  # pylint: disable=too-many-arguments, too-many-locals
                     create_error_response(
                         ErrorType.VALIDATION_ERROR,
                         f"Invalid chart configuration: {str(e)}",
-                        operation="mt5_analyze"
+                        operation="mt5_analyze",
                     )
                 )
 
@@ -439,7 +440,7 @@ def mt5_analyze_tool(  # pylint: disable=too-many-arguments, too-many-locals
                         create_error_response(
                             ErrorType.VALIDATION_ERROR,
                             f"forecast_periods must be a positive integer, got {forecast_periods}",
-                            operation="mt5_analyze"
+                            operation="mt5_analyze",
                         )
                     )
 
@@ -454,7 +455,7 @@ def mt5_analyze_tool(  # pylint: disable=too-many-arguments, too-many-locals
                     create_error_response(
                         ErrorType.VALIDATION_ERROR,
                         f"Invalid forecast configuration: {str(e)}",
-                        operation="mt5_analyze"
+                        operation="mt5_analyze",
                     )
                 )
 
@@ -474,7 +475,7 @@ def mt5_analyze_tool(  # pylint: disable=too-many-arguments, too-many-locals
                 create_error_response(
                     ErrorType.VALIDATION_ERROR,
                     f"Invalid analysis request: {str(e)}",
-                    operation="mt5_analyze"
+                    operation="mt5_analyze",
                 )
             )
 
@@ -489,10 +490,7 @@ def mt5_analyze_tool(  # pylint: disable=too-many-arguments, too-many-locals
                     ErrorType.CALCULATION_ERROR,
                     f"Analysis execution failed: {str(e)}",
                     operation="mt5_analyze",
-                    details={
-                        "symbol": query_symbol,
-                        "operation": query_operation
-                    }
+                    details={"symbol": query_symbol, "operation": query_operation},
                 )
             )
 
@@ -505,7 +503,7 @@ def mt5_analyze_tool(  # pylint: disable=too-many-arguments, too-many-locals
                 ErrorType.UNKNOWN_ERROR,
                 f"Unexpected error: {str(e)}",
                 operation="mt5_analyze",
-                details={"exception_type": type(e).__name__}
+                details={"exception_type": type(e).__name__},
             )
         )
 
@@ -572,7 +570,7 @@ def mt5_execute_tool(
                 error_response = create_error_response(
                     ErrorType.RUNTIME_ERROR,
                     f"Rate limit check failed: {str(e)}",
-                    operation="rate_limit_check"
+                    operation="rate_limit_check",
                 )
                 return format_json_response(error_response)
 
@@ -582,7 +580,7 @@ def mt5_execute_tool(
                 ErrorType.VALIDATION_ERROR,
                 "Command must be a non-empty string",
                 operation="mt5_execute",
-                details={"received_type": type(command).__name__}
+                details={"received_type": type(command).__name__},
             )
             return format_json_response(error_response)
 
@@ -591,7 +589,7 @@ def mt5_execute_tool(
             error_response = create_error_response(
                 ErrorType.VALIDATION_ERROR,
                 f"Command too long: {len(command)} characters (max 50000)",
-                operation="mt5_execute"
+                operation="mt5_execute",
             )
             return format_json_response(error_response)
 
@@ -611,7 +609,7 @@ def mt5_execute_tool(
                     ErrorType.VALIDATION_ERROR,
                     f"Dangerous operation detected: {pattern}",
                     operation="mt5_execute",
-                    details={"pattern": pattern}
+                    details={"pattern": pattern},
                 )
                 return format_json_response(error_response)
 
@@ -623,7 +621,7 @@ def mt5_execute_tool(
             error_response = create_error_response(
                 ErrorType.MT5_CONNECTION,
                 f"Failed to initialize execution environment: {str(e)}",
-                operation="mt5_execute"
+                operation="mt5_execute",
             )
             return format_json_response(error_response)
 
@@ -635,6 +633,7 @@ def mt5_execute_tool(
             logger.error(f"Code execution failed: {str(e)}", exc_info=True)
             if show_traceback:
                 import traceback
+
                 return f"Error executing code:\n\n{traceback.format_exc()}"
             return f"Error: {type(e).__name__}: {str(e)}"
 
@@ -644,6 +643,7 @@ def mt5_execute_tool(
         logger.error(f"Unexpected error in mt5_execute_tool: {str(e)}", exc_info=True)
         if show_traceback:
             import traceback
+
             return f"Unexpected error:\n\n{traceback.format_exc()}"
         return f"Unexpected error: {type(e).__name__}: {str(e)}"
 
@@ -660,30 +660,31 @@ def create_gradio_interface():
     Returns:
         gr.Blocks: Gradio demo with tabbed interface
     """
-    
+
     def get_server_status():
         """Get current server status and metrics."""
         try:
             # Try to get MT5 connection and validate it
             mt5_conn = get_connection()
-            
+
             # Validate connection first
             if not mt5_conn.validate_connection():
                 raise RuntimeError("MT5 terminal is not connected. Please ensure MT5 is running.")
-            
+
             mt5_status = "✅ Connected"
-            
+
             # Get terminal info using safe_mt5_call
             import MetaTrader5 as mt5
+
             terminal_info = safe_mt5_call(mt5.terminal_info)
             if terminal_info:
                 terminal_data = terminal_info._asdict()
-                company = terminal_data.get('company', 'Unknown')
-                build = terminal_data.get('build', 'Unknown')
+                company = terminal_data.get("company", "Unknown")
+                build = terminal_data.get("build", "Unknown")
                 terminal_details = f"{company} (Build {build})"
             else:
                 terminal_details = "Unable to fetch details"
-                
+
             # Get account info using safe_mt5_call
             account_info = safe_mt5_call(mt5.account_info)
             if account_info:
@@ -695,24 +696,23 @@ def create_gradio_interface():
                 )
             else:
                 account_details = "Unable to fetch account details"
-                
+
             # Count available symbols using safe_mt5_call
             symbols = safe_mt5_call(mt5.symbols_total)
             symbol_count = f"{symbols} symbols available" if symbols else "Unable to count symbols"
-            
+
         except Exception as e:
             mt5_status = f"❌ Disconnected: {str(e)}"
             terminal_details = "N/A"
             account_details = "N/A"
             symbol_count = "N/A"
-        
+
         # Rate limit stats
         total_ips = len(_rate_limit_store)
         rate_limit_info = (
-            f"Rate Limit: {HTTP_RATE_LIMIT} req/min per IP\n"
-            f"Active IPs: {total_ips}"
+            f"Rate Limit: {HTTP_RATE_LIMIT} req/min per IP\n" f"Active IPs: {total_ips}"
         )
-        
+
         # Build status report
         status_report = f"""## MetaTrader 5 MCP Server Status
 
@@ -743,205 +743,269 @@ def create_gradio_interface():
 *Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
 """
         return status_report
-    
+
     def get_transaction_history(days=90):
         """Get transaction history with Plotly chart."""
         try:
             import MetaTrader5 as mt5
             import pandas as pd
-            
+
             # Import plotly
             try:
                 import plotly.graph_objects as go
                 from plotly.subplots import make_subplots
             except ImportError:
                 return None, "⚠️ Plotly not installed. Run: pip install plotly>=5.18.0"
-            
+
             # Get MT5 connection
             mt5_conn = get_connection()
             if not mt5_conn.validate_connection():
                 return None, "❌ MT5 not connected"
-            
+
             # Get deals from selected time range
             end_date = datetime.now()
             start_date = end_date - timedelta(days=days)
-            
+
             deals = safe_mt5_call(mt5.history_deals_get, start_date, end_date)
-            
+
             if not deals or len(deals) == 0:
                 return None, f"📊 No transaction history found in the last {days} days"
-            
+
             # Convert to DataFrame
             df = pd.DataFrame(list(deals), columns=deals[0]._asdict().keys())
-            df['time'] = pd.to_datetime(df['time'], unit='s')
-            
+            df["time"] = pd.to_datetime(df["time"], unit="s")
+
             # Identify deposit/withdrawal (entry = 2 for balance operations)
-            df['is_balance_op'] = df['entry'] == 2
-            df['type_name'] = df.apply(
-                lambda row: '💵 Deposit' if row['is_balance_op'] and row['profit'] > 0
-                else '💸 Withdrawal' if row['is_balance_op'] and row['profit'] < 0
-                else '📈 Trade', axis=1
+            df["is_balance_op"] = df["entry"] == 2
+            df["type_name"] = df.apply(
+                lambda row: (
+                    "💵 Deposit"
+                    if row["is_balance_op"] and row["profit"] > 0
+                    else (
+                        "💸 Withdrawal"
+                        if row["is_balance_op"] and row["profit"] < 0
+                        else "📈 Trade"
+                    )
+                ),
+                axis=1,
             )
-            
+
             # Calculate cumulative profit
-            df['cumulative_profit'] = df['profit'].cumsum()
-            
+            df["cumulative_profit"] = df["profit"].cumsum()
+
             # Create subplot figure
             fig = make_subplots(
-                rows=2, cols=1,
+                rows=2,
+                cols=1,
                 row_heights=[0.7, 0.3],
-                subplot_titles=('Cumulative P&L', 'Individual Transactions'),
-                vertical_spacing=0.12
+                subplot_titles=("Cumulative P&L", "Individual Transactions"),
+                vertical_spacing=0.12,
             )
-            
+
             # Add cumulative profit line
             fig.add_trace(
                 go.Scatter(
-                    x=df['time'], 
-                    y=df['cumulative_profit'],
-                    mode='lines',
-                    name='Cumulative P&L',
-                    line=dict(color='#2E86AB', width=2),
-                    hovertemplate='Date: %{x}<br>Cumulative: $%{y:.2f}<extra></extra>'
+                    x=df["time"],
+                    y=df["cumulative_profit"],
+                    mode="lines",
+                    name="Cumulative P&L",
+                    line={"color": "#2E86AB", "width": 2},
+                    hovertemplate=("Date: %{x}<br>Cumulative: $%{y:.2f}<extra></extra>"),
                 ),
-                row=1, col=1
+                row=1,
+                col=1,
             )
-            
+
             # Add markers for trades (green/red)
-            trades_df = df[~df['is_balance_op']]
+            trades_df = df[~df["is_balance_op"]]
             if len(trades_df) > 0:
-                colors_trades = ['#06D6A0' if p > 0 else '#EF476F' for p in trades_df['profit']]
+                colors_trades = ["#06D6A0" if p > 0 else "#EF476F" for p in trades_df["profit"]]
                 fig.add_trace(
                     go.Scatter(
-                        x=trades_df['time'],
-                        y=trades_df['cumulative_profit'],
-                        mode='markers',
-                        name='Trades',
-                        marker=dict(size=8, color=colors_trades, opacity=0.7, line=dict(width=1, color='white')),
-                        text=[f"{row['symbol']}: ${row['profit']:.2f}" for _, row in trades_df.iterrows()],
-                        hovertemplate='%{text}<br>Time: %{x}<extra></extra>'
+                        x=trades_df["time"],
+                        y=trades_df["cumulative_profit"],
+                        mode="markers",
+                        name="Trades",
+                        marker={
+                            "size": 8,
+                            "color": colors_trades,
+                            "opacity": 0.7,
+                            "line": {"width": 1, "color": "white"},
+                        },
+                        text=[
+                            f"{row['symbol']}: ${row['profit']:.2f}"
+                            for _, row in trades_df.iterrows()
+                        ],
+                        hovertemplate="%{text}<br>Time: %{x}<extra></extra>",
                     ),
-                    row=1, col=1
+                    row=1,
+                    col=1,
                 )
-            
+
             # Add markers for deposits/withdrawals (diamond shape)
-            balance_df = df[df['is_balance_op']]
+            balance_df = df[df["is_balance_op"]]
             if len(balance_df) > 0:
-                colors_balance = ['#118AB2' if p > 0 else '#FFD60A' for p in balance_df['profit']]
+                colors_balance = ["#118AB2" if p > 0 else "#FFD60A" for p in balance_df["profit"]]
                 fig.add_trace(
                     go.Scatter(
-                        x=balance_df['time'],
-                        y=balance_df['cumulative_profit'],
-                        mode='markers',
-                        name='Deposits/Withdrawals',
-                        marker=dict(size=12, color=colors_balance, opacity=0.9, symbol='diamond', line=dict(width=2, color='white')),
-                        text=[f"{row['type_name']}: ${row['profit']:.2f}" for _, row in balance_df.iterrows()],
-                        hovertemplate='%{text}<br>Time: %{x}<extra></extra>'
+                        x=balance_df["time"],
+                        y=balance_df["cumulative_profit"],
+                        mode="markers",
+                        name="Deposits/Withdrawals",
+                        marker={
+                            "size": 12,
+                            "color": colors_balance,
+                            "opacity": 0.9,
+                            "symbol": "diamond",
+                            "line": {"width": 2, "color": "white"},
+                        },
+                        text=[
+                            f"{row['type_name']}: ${row['profit']:.2f}"
+                            for _, row in balance_df.iterrows()
+                        ],
+                        hovertemplate="%{text}<br>Time: %{x}<extra></extra>",
                     ),
-                    row=1, col=1
+                    row=1,
+                    col=1,
                 )
-            
+
             # Add bar chart for individual transactions
-            colors_bar = ['#06D6A0' if p > 0 else '#EF476F' if not is_bal else '#118AB2' if p > 0 else '#FFD60A'
-                          for p, is_bal in zip(df['profit'], df['is_balance_op'])]
-            
+            colors_bar = [
+                (
+                    "#06D6A0"
+                    if p > 0
+                    else "#EF476F" if not is_bal else "#118AB2" if p > 0 else "#FFD60A"
+                )
+                for p, is_bal in zip(df["profit"], df["is_balance_op"])
+            ]
+
             fig.add_trace(
                 go.Bar(
-                    x=df['time'],
-                    y=df['profit'],
-                    name='Profit/Loss',
-                    marker=dict(color=colors_bar, opacity=0.8),
-                    hovertemplate='%{x}<br>P&L: $%{y:.2f}<extra></extra>',
-                    showlegend=False
+                    x=df["time"],
+                    y=df["profit"],
+                    name="Profit/Loss",
+                    marker={"color": colors_bar, "opacity": 0.8},
+                    hovertemplate="%{x}<br>P&L: $%{y:.2f}<extra></extra>",
+                    showlegend=False,
                 ),
-                row=2, col=1
+                row=2,
+                col=1,
             )
-            
+
             # Update layout - full width and auto-fit
             fig.update_layout(
                 height=700,
-                hovermode='x unified',
-                template='plotly_white',
-                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
-                margin=dict(l=50, r=50, t=80, b=50),
+                hovermode="x unified",
+                template="plotly_white",
+                legend={
+                    "orientation": "h",
+                    "yanchor": "bottom",
+                    "y": 1.02,
+                    "xanchor": "right",
+                    "x": 1,
+                },
+                margin={"l": 50, "r": 50, "t": 80, "b": 50},
                 autosize=True,
-                xaxis=dict(automargin=True),
-                xaxis2=dict(automargin=True)
+                xaxis={"automargin": True},
+                xaxis2={"automargin": True},
             )
-            
-            fig.update_xaxes(title_text='Date', row=2, col=1)
-            fig.update_yaxes(title_text='Cumulative P&L ($)', row=1, col=1)
-            fig.update_yaxes(title_text='Transaction Amount ($)', row=2, col=1)
-            
+
+            fig.update_xaxes(title_text="Date", row=2, col=1)
+            fig.update_yaxes(title_text="Cumulative P&L ($)", row=1, col=1)
+            fig.update_yaxes(title_text="Transaction Amount ($)", row=2, col=1)
+
             # Summary stats
-            total_profit = df['profit'].sum()
+            total_profit = df["profit"].sum()
             total_trades = len(trades_df)
-            total_deposits = balance_df[balance_df['profit'] > 0]['profit'].sum() if len(balance_df) > 0 else 0
-            total_withdrawals = abs(balance_df[balance_df['profit'] < 0]['profit'].sum()) if len(balance_df) > 0 else 0
-            win_rate = (trades_df['profit'] > 0).sum() / len(trades_df) * 100 if len(trades_df) > 0 else 0
-            
+            total_deposits = (
+                balance_df[balance_df["profit"] > 0]["profit"].sum() if len(balance_df) > 0 else 0
+            )
+            total_withdrawals = (
+                abs(balance_df[balance_df["profit"] < 0]["profit"].sum())
+                if len(balance_df) > 0
+                else 0
+            )
+            win_rate = (
+                (trades_df["profit"] > 0).sum() / len(trades_df) * 100 if len(trades_df) > 0 else 0
+            )
+
             # Explanation of missing markers
-            deposit_note = f"💎 **{len(balance_df[balance_df['profit'] > 0])} Deposits** found" if len(balance_df[balance_df['profit'] > 0]) > 0 else "⚠️ **No deposits** detected (entry type must be 2 with positive profit)"
-            withdrawal_note = f"💎 **{len(balance_df[balance_df['profit'] < 0])} Withdrawals** found" if len(balance_df[balance_df['profit'] < 0]) > 0 else "⚠️ **No withdrawals** detected (entry type must be 2 with negative profit)"
-            
+            deposit_note = (
+                f"💎 **{len(balance_df[balance_df['profit'] > 0])} Deposits** found"
+                if len(balance_df[balance_df["profit"] > 0]) > 0
+                else "⚠️ **No deposits** detected (entry type must be 2 with positive profit)"
+            )
+            withdrawal_note = (
+                f"💎 **{len(balance_df[balance_df['profit'] < 0])} Withdrawals** found"
+                if len(balance_df[balance_df["profit"] < 0]) > 0
+                else "⚠️ **No withdrawals** detected (entry type must be 2 with negative profit)"
+            )
+
             summary = f"""
 **📊 Summary (Last {days} Days)**
 - **Total Trades:** {total_trades} (🟢 Green = Profit, 🔴 Red = Loss)
 - **Win Rate:** {win_rate:.1f}%
 - **Total Trading P&L:** ${total_profit:.2f}
 - {deposit_note}
-  - Total: ${total_deposits:.2f}
+    - Total: ${total_deposits:.2f}
 - {withdrawal_note}
-  - Total: ${total_withdrawals:.2f}
+    - Total: ${total_withdrawals:.2f}
 
 ---
 **📖 Chart Explanation:**
 - **Top chart**: Cumulative P&L line shows your account growth over time
-  - Dots on the line = individual trades
-  - Diamond markers = deposits (blue) / withdrawals (yellow)
+    - Dots on the line = individual trades
+    - Diamond markers = deposits (blue) / withdrawals (yellow)
 - **Bottom chart**: Individual transaction bars show each trade/deposit/withdrawal amount
-  - Green bars = profitable trades
-  - Red bars = losing trades
-  - Blue bars = deposits
-  - Yellow bars = withdrawals
+    - Green bars = profitable trades
+    - Red bars = losing trades
+    - Blue bars = deposits
+    - Yellow bars = withdrawals
 
-⚠️ **Note:** MT5 marks deposits/withdrawals with `entry=2` deal type. If you don't see diamond markers, your account may not have any deposits/withdrawals in this period, or they're recorded differently by your broker.
+⚠️ **Note:** MT5 marks deposits/withdrawals with `entry=2` deal type.
+If you don't see diamond markers, your account may not have any
+deposits/withdrawals in this period, or they're recorded differently
+by your broker.
 
 *Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
 """
-            
+
             return fig, summary
-            
+
         except Exception as e:
             return None, f"❌ Error: {str(e)}"
-    
+
     def get_open_positions():
         """Get open positions with real-time data."""
         try:
             import MetaTrader5 as mt5
             import pandas as pd
-            
+
             # Get MT5 connection
             mt5_conn = get_connection()
             if not mt5_conn.validate_connection():
                 return "❌ MT5 not connected", ""
-            
+
             # Get open positions
             positions = safe_mt5_call(mt5.positions_get)
             total = safe_mt5_call(mt5.positions_total)
-            
+
             if not positions or len(positions) == 0:
-                return f"📊 **Open Positions: 0**\n\n*No open positions*\n\n*Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*", ""
-            
+                message = (
+                    "📊 **Open Positions: 0**\n\n*No open positions*\n\n*Last "
+                    f"updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*"
+                )
+                return (message, "")
+
             # Convert to DataFrame
             df = pd.DataFrame(list(positions), columns=positions[0]._asdict().keys())
-            df['time'] = pd.to_datetime(df['time'], unit='s')
-            df['type_str'] = df['type'].apply(lambda x: '🟢 BUY' if x == 0 else '🔴 SELL')
-            
+            df["time"] = pd.to_datetime(df["time"], unit="s")
+            df["type_str"] = df["type"].apply(lambda x: "🟢 BUY" if x == 0 else "🔴 SELL")
+
             # Calculate current P&L
-            total_profit = df['profit'].sum()
-            total_volume = df['volume'].sum()
-            
+            total_profit = df["profit"].sum()
+            total_volume = df["volume"].sum()
+
             # Create HTML table
             table_html = "<table style='width:100%; border-collapse: collapse;'>"
             table_html += "<tr style='background-color: #f0f0f0; font-weight: bold;'>"
@@ -953,21 +1017,39 @@ def create_gradio_interface():
             table_html += "<th style='padding: 8px; border: 1px solid #ddd;'>P&L</th>"
             table_html += "<th style='padding: 8px; border: 1px solid #ddd;'>Time</th>"
             table_html += "</tr>"
-            
+
             for _, row in df.iterrows():
-                profit_color = '#06D6A0' if row['profit'] >= 0 else '#EF476F'
+                profit_color = "#06D6A0" if row["profit"] >= 0 else "#EF476F"
                 table_html += "<tr>"
-                table_html += f"<td style='padding: 8px; border: 1px solid #ddd;'>{row['symbol']}</td>"
-                table_html += f"<td style='padding: 8px; border: 1px solid #ddd;'>{row['type_str']}</td>"
-                table_html += f"<td style='padding: 8px; border: 1px solid #ddd;'>{row['volume']:.2f}</td>"
-                table_html += f"<td style='padding: 8px; border: 1px solid #ddd;'>{row['price_open']:.5f}</td>"
-                table_html += f"<td style='padding: 8px; border: 1px solid #ddd;'>{row['price_current']:.5f}</td>"
-                table_html += f"<td style='padding: 8px; border: 1px solid #ddd; color: {profit_color}; font-weight: bold;'>${row['profit']:.2f}</td>"
-                table_html += f"<td style='padding: 8px; border: 1px solid #ddd;'>{row['time'].strftime('%Y-%m-%d %H:%M')}</td>"
+                table_html += (
+                    f"<td style='padding: 8px; border: 1px solid #ddd;'>{row['symbol']}</td>"
+                )
+                table_html += (
+                    f"<td style='padding: 8px; border: 1px solid #ddd;'>{row['type_str']}</td>"
+                )
+                table_html += (
+                    f"<td style='padding: 8px; border: 1px solid #ddd;'>{row['volume']:.2f}</td>"
+                )
+                table_html += (
+                    "<td style='padding: 8px; border: 1px solid #ddd;'>"
+                    f"{row['price_open']:.5f}</td>"
+                )
+                table_html += (
+                    "<td style='padding: 8px; border: 1px solid #ddd;'>"
+                    f"{row['price_current']:.5f}</td>"
+                )
+                table_html += (
+                    "<td style='padding: 8px; border: 1px solid #ddd; color: "
+                    f"{profit_color}; font-weight: bold;'>${row['profit']:.2f}</td>"
+                )
+                table_html += (
+                    "<td style='padding: 8px; border: 1px solid #ddd;'>"
+                    f"{row['time'].strftime('%Y-%m-%d %H:%M')}</td>"
+                )
                 table_html += "</tr>"
-            
+
             table_html += "</table>"
-            
+
             # Summary
             summary = f"""
 ## 📊 Open Positions: {total}
@@ -977,16 +1059,16 @@ def create_gradio_interface():
 
 *Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
 """
-            
+
             return summary, table_html
-            
+
         except Exception as e:
             return f"❌ Error: {str(e)}", ""
-    
+
     # Build Gradio interface with tabs
     with gr.Blocks(title="MetaTrader 5 MCP Server") as demo:
         gr.Markdown("# MetaTrader 5 MCP Server")
-        
+
         with gr.Tabs():
             # Tab 1: Status Dashboard
             with gr.Tab("📊 Status"):
@@ -994,70 +1076,86 @@ def create_gradio_interface():
                     "Real-time status dashboard for the MT5 MCP server. "
                     "Connect your MCP client to `/gradio_api/mcp/` to use the tools."
                 )
-                
+
                 status_output = gr.Markdown(get_server_status())
-                
+
                 refresh_btn = gr.Button("🔄 Refresh Status", variant="primary")
                 refresh_btn.click(fn=get_server_status, outputs=status_output)
-                
+
                 # Auto-refresh every 30 seconds
                 status_timer = gr.Timer(30)
                 status_timer.tick(fn=get_server_status, outputs=status_output)
-            
+
             # Tab 2: Transaction History
             with gr.Tab("💰 Transaction History"):
                 gr.Markdown("### Trading history with deposits/withdrawals")
-                gr.Markdown("🔹 **Green/Red dots** = Trades | 💎 **Blue/Yellow diamonds** = Deposits/Withdrawals")
-                
+                gr.Markdown(
+                    "🔹 **Green/Red dots** = Trades | 💎 **Blue/Yellow diamonds** "
+                    "= Deposits/Withdrawals"
+                )
+
                 with gr.Row():
                     date_range = gr.Radio(
                         choices=[7, 30, 90, 180, 365],
                         value=90,
                         label="Time Range (Days)",
-                        info="Select how many days of history to display"
+                        info="Select how many days of history to display",
                     )
-                    history_refresh_btn = gr.Button("🔄 Refresh History", variant="primary", scale=0)
-                
+                    history_refresh_btn = gr.Button(
+                        "🔄 Refresh History", variant="primary", scale=0
+                    )
+
                 history_plot = gr.Plot(label="Transaction History")
                 history_summary = gr.Markdown()
-                
+
                 def update_history(days):
                     fig, summary = get_transaction_history(days)
                     return fig, summary
-                
+
                 # Update on button click or date range change
-                history_refresh_btn.click(fn=update_history, inputs=[date_range], outputs=[history_plot, history_summary])
-                date_range.change(fn=update_history, inputs=[date_range], outputs=[history_plot, history_summary])
-                
+                history_refresh_btn.click(
+                    fn=update_history, inputs=[date_range], outputs=[history_plot, history_summary]
+                )
+                date_range.change(
+                    fn=update_history, inputs=[date_range], outputs=[history_plot, history_summary]
+                )
+
                 # Auto-refresh every 1 minute
                 history_timer = gr.Timer(60)
-                history_timer.tick(fn=lambda: update_history(date_range.value), outputs=[history_plot, history_summary])
-                
+                history_timer.tick(
+                    fn=lambda: update_history(date_range.value),
+                    outputs=[history_plot, history_summary],
+                )
+
                 # Load initial data
                 demo.load(fn=lambda: update_history(90), outputs=[history_plot, history_summary])
-            
+
             # Tab 3: Open Positions
             with gr.Tab("📈 Open Positions"):
                 gr.Markdown("### Real-time open positions (Auto-refresh every 1 second)")
-                
+
                 positions_summary = gr.Markdown()
                 positions_table = gr.HTML()
-                
+
                 positions_refresh_btn = gr.Button("🔄 Refresh Positions", variant="primary")
-                
+
                 def update_positions():
                     summary, table = get_open_positions()
                     return summary, table
-                
-                positions_refresh_btn.click(fn=update_positions, outputs=[positions_summary, positions_table])
-                
+
+                positions_refresh_btn.click(
+                    fn=update_positions, outputs=[positions_summary, positions_table]
+                )
+
                 # Auto-refresh every 1 second
                 positions_timer = gr.Timer(1)
-                positions_timer.tick(fn=update_positions, outputs=[positions_summary, positions_table])
-                
+                positions_timer.tick(
+                    fn=update_positions, outputs=[positions_summary, positions_table]
+                )
+
                 # Load initial data
                 demo.load(fn=update_positions, outputs=[positions_summary, positions_table])
-    
+
     return demo
 
 
