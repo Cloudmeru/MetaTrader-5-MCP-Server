@@ -1,5 +1,5 @@
 """
-Integration test script for MT5 MCP Server v0.5
+Integration test script for MT5 MCP Server v0.5.1
 Tests the complete system without requiring MT5 terminal.
 """
 
@@ -9,7 +9,7 @@ import subprocess
 import traceback
 
 print("=" * 80)
-print("MT5 MCP Server v0.5 - Integration Test")
+print("MT5 MCP Server v0.5.1 - Integration Test")
 print("=" * 80)
 print()
 
@@ -24,7 +24,7 @@ try:
             if line.startswith("Version:"):
                 version = line.split(":")[1].strip()
                 print(f"✓ Package installed: mt5-mcp v{version}")
-                assert version == "0.5.0", f"Version mismatch: expected 0.5.0, got {version}"
+                assert version == "0.5.1", f"Version mismatch: expected 0.5.1, got {version}"
             if line.startswith("Location:"):
                 location = line.split(":")[1].strip()
                 print(f"✓ Install location: {location}")
@@ -240,7 +240,7 @@ print("\n" + "=" * 80)
 print("Integration Test Summary")
 print("=" * 80)
 print()
-print("✓ Package v0.5.0 installed successfully")
+print("✓ Package v0.5.1 installed successfully")
 print("✓ CLI with multi-transport support working")
 print("✓ Core modules functional")
 print("✓ Thread safety implemented")

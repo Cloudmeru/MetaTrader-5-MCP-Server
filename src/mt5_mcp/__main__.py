@@ -38,7 +38,7 @@ async def run_stdio_server():
         logger.info("stdio server initialized, waiting for requests...")
         init_options = InitializationOptions(
             server_name="metatrader5-mcp",
-            server_version="0.5.0",
+            server_version="0.5.1",
             capabilities=app.get_capabilities(
                 notification_options=NotificationOptions(), experimental_capabilities={}
             ),
@@ -64,7 +64,7 @@ def run_gradio_server(server_host: str = "0.0.0.0", server_port: int = 7860, lim
 def main():
     """Main entry point with multi-transport support."""
     parser = argparse.ArgumentParser(
-        description="MT5 MCP Server v0.5 - Multi-Transport Edition",
+        description="MT5 MCP Server v0.5.1 - Resilient Transport Edition",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -139,7 +139,7 @@ MCP Endpoints:
         handlers=log_handlers,
     )
 
-    logger.info(f"MT5 MCP Server v0.5 starting with transport: {args.transport}")
+    logger.info(f"MT5 MCP Server v0.5.1 starting with transport: {args.transport}")
 
     # Run appropriate transport(s)
     if args.transport == "stdio":

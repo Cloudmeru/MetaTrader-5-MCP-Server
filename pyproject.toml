@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mt5-mcp"
-version = "0.5.0"
+version = "0.5.1"
 description = "MCP server for MetaTrader 5 with multi-transport support (stdio + HTTP/SSE via Gradio)"
 readme = "README.md"
 requires-python = ">=3.10"

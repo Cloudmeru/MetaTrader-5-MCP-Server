@@ -2,13 +2,13 @@
 
 MetaTrader 5 integration for Model Context Protocol (MCP). Provides read-only access to MT5 market data through Python commands.
 
-## ⚡ What's New in v0.5.0
+## ⚡ What's New in v0.5.1
 
-- **Dual-transport launcher** – `python -m mt5_mcp` keeps the stdio-only default for desktop clients, while `--transport http` or `--transport both` enables the new streamable HTTP endpoint.
-- **Gradio MCP server** – Install the optional `[ui]` extra to expose `/gradio_api/mcp/` with native MCP schemas, progress updates, and Hugging Face Spaces compatibility.
-- **Built-in rate limiting** – HTTP requests are throttled per IP (10 req/min by default) with CLI overrides and the ability to disable caps for trusted networks.
-- **Thread-safe MT5 access** – Shared connection management and locking prevent concurrent HTTP calls from colliding with stdio traffic.
-- **Documentation refresh** – README/USAGE now cover HTTP setup, MCP client snippets, deployment tips, and migration guidance for v0.5.0.
+- **Standardized error taxonomy** – New helpers define 12 error classes, safe JSON parsing, enum conversion, and field validation so every tool returns consistent, timestamped diagnostics.
+- **Tool-level guardrails** – `mt5_query`, `mt5_analyze`, and `execute_mt5` now enforce payload size limits, reject dangerous operations, validate MT5 connectivity up front, and catch-all exceptions without crashing the server.
+- **Handler resilience** – Request objects, enums, and MT5 parameters are validated before execution, with wrapped exceptions that include operation context for easier debugging.
+- **Connection + executor hardening** – MT5 initialization retries, namespace fallback messaging, and result-format safety nets keep stdio/HTTP transports stable even when inputs misbehave.
+- **Expanded regression tests** – 30+ new cases cover malformed JSON, invalid enums, missing fields, MT5 connection failures, and rate-limit handling for production readiness.
 
 ```powershell
 # Default behavior (stdio only, backward compatible)
