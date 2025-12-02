@@ -1197,10 +1197,12 @@ def launch_gradio_mcp(
     )
     logger.info("MCP endpoint: http://%s:%s/gradio_api/mcp/", host, port)
 
+    # Explicitly specify which functions should be exposed as MCP tools
     demo.launch(
         server_name=host,
         server_port=port,
         mcp_server=True,  # Enable MCP endpoint
+        mcp_functions=[mt5_query_tool, mt5_analyze_tool, mt5_execute_tool],  # Only expose these 3 tools
         share=share,
         show_error=True,
     )

@@ -190,8 +190,8 @@ try:
         pyproject = tomli.load(f)
         version = pyproject["project"]["version"]
         print(f"✓ Package version: {version}")
-        assert version == "0.5.1", f"Version mismatch: expected 0.5.1, got {version}"
-        print("✓ Version is 0.5.1 (Production-ready error handling)")
+        assert version == "0.5.2", f"Version mismatch: expected 0.5.2, got {version}"
+        print("✓ Version is 0.5.2 (Fixed Gradio MCP tool exposure)")
 except ImportError:
     print("⚠ tomli not available, skipping version check")
 except Exception as e:

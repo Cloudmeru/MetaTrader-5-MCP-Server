@@ -2,6 +2,18 @@
 
 All notable changes will be tracked here. Dates reflect when the feature set landed in the repository; see git history for exact commits.
 
+## v0.5.2 – Fixed Gradio MCP Tool Exposure (December 2, 2025)
+
+### Critical Bug Fix
+- **Gradio MCP server now properly exposes only 3 tools** (`mt5_query`, `mt5_analyze`, `mt5_execute`) instead of all internal helper functions
+- Added `mcp_functions` parameter to explicitly control which functions are exposed as MCP tools
+- Previously, Gradio was auto-exposing internal UI helper functions (`get_server_status`, `update_history`, `update_positions`, `_lambda_`, etc.) as MCP tools, cluttering the tool list
+
+### What Changed
+- **Before**: 9+ tools exposed (3 actual + 6+ internal UI functions)
+- **After**: Exactly 3 tools exposed (mt5_query, mt5_analyze, mt5_execute)
+- **Impact**: Clean MCP API surface, no confusion about which tools to use
+
 ## v0.5.1 – Production-Ready Error Handling (December 2, 2025)
 
 ### Comprehensive Error Handling
