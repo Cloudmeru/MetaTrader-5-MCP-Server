@@ -80,15 +80,12 @@ Documentation = "https://github.com/Cloudmeru/Metatrader-5-MCP-Server/blob/main/
 mt5-mcp = "mt5_mcp.__main__:main"
 
 [project.optional-dependencies]
-toon = [
-    # Official TOON encoder/decoder (token-efficient JSON for LLMs).
-    # Pinned to the GitHub release tag — the matching PyPI version is a
-    # stub (0.1.0 with NotImplementedError). Real implementation lives
-    # at toon-format/toon-python and ships from the project's GitHub
-    # Releases. ``v0.9.0-beta.1`` is the only published tag as of the
-    # v0.6.3 release.
-    "toon_format @ https://github.com/toon-format/toon-python/archive/refs/tags/v0.9.0-beta.1.tar.gz",
-]
+# ``toon`` (TOON token-efficient output encoding) is **not included in
+# this release**. The only published TOON Python implementation lives at
+# ``toon-format/toon-python`` on GitHub (no PyPI wheel), and PyPI rejects
+# sdist metadata that references direct-URL dependencies. Vendoring the
+# encoder is tracked for v0.6.4; until then, the TOON heuristic in
+# ``mt5_mcp.toon_output.format_response`` silently falls back to JSON.
 test = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",

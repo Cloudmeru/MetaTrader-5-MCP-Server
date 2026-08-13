@@ -62,6 +62,26 @@ pip uninstall -y fastmcp fastmcp-slim
 pip install mt5-mcp
 ```
 
+### v0.6.3.1 — TOON encoder deferred to v0.6.4
+
+The v0.6.3 release was originally planned to ship the TOON encoder
+behind an optional `[toon]` extra pointing at the upstream
+`toon-format/toon-python` GitHub tarball. The first publish attempt
+**failed at the PyPI upload step**:
+
+```
+400 Bad Request: Can't have direct dependency:
+toon_format @ https://github.com/toon-format/toon-python/...
+```
+
+PyPI rejects direct-URL `Requires-Dist` references in sdist metadata
+(only PyPI-hosted wheels are valid). The v0.6.3 wheel was rebuilt
+**without** the `[toon]` extra; the TOON shape heuristic in
+`mt5_mcp.toon_output.format_response` silently falls back to JSON
+when the encoder isn't installed. All 18 TOON tests run via the
+editable install with `toon_format` available locally — they will
+run from a clean PyPI install once we vendor the encoder in v0.6.4.
+
 ---
 
 ## v0.6.2 – Server-decides TOON encoding (August 13, 2026)

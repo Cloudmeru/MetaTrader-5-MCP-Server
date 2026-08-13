@@ -6,7 +6,7 @@ MetaTrader 5 integration for Model Context Protocol (MCP). Provides read-only ac
 
 - **Production packaging fix** – The wheel now depends on `fastmcp-slim[server]>=3.4,<4` directly instead of the empty `fastmcp` meta-package. This bypasses a [known FastMCP v3 packaging hazard](https://github.com/PrefectHQ/fastmcp/issues/4207) that could leave the `fastmcp` namespace empty after a pip upgrade. Also: `MetaTrader5` is now platform-gated to Windows, so the wheel installs cleanly on Linux/macOS too (with a runtime guard that explains why the tools can't run there).
 
-## ⚡ What's New in v0.6.1
+## ⚡ What's New in v0.6.2
 
 - **TOON output encoding** – tabular tool responses (50-bar `copy_rates_from_pos`, etc.) are automatically encoded in [TOON](https://github.com/toon-format/toon) format when it would save ≥10 % of tokens over compact JSON. The LLM never has to ask for it; the server detects the shape. Install with `pip install "mt5-mcp[toon]"`.
 
@@ -113,12 +113,11 @@ pip install -e .
 Optional extras:
 
 ```powershell
-# Token-efficient output for LLM agents (TOON encoding)
-pip install -e .[toon]
-
 # Everything
 pip install -e .[all]
 ```
+
+The TOON token-efficient output encoder is **not bundled in this release** — the upstream `toon-format/toon-python` package has no PyPI wheel, and PyPI rejects direct-URL dependencies. The TOON heuristic in `mt5_mcp.toon_output` silently falls back to JSON when the encoder isn't installed. Vendoring the encoder is tracked for v0.6.4.
 
 This installs:
 
@@ -215,9 +214,17 @@ python -m mt5_mcp [--transport stdio|http|sse|all] [--host HOST] [--port PORT]
 | `--log-file` | — | Write logs to this file in addition to stderr |
 | `--asgi` | — | Emit ASGI app handle (don't actually run the server) |
 
-## TOON Output Encoding (Token-Efficient for LLMs)
+## TOON Output Encoding (Token-Efficient for LLMs) — *experimental*
 
-The server automatically encodes tabular tool responses in [TOON](https://github.com/toon-format/toon) — a line-oriented, indentation-based format designed for LLM contexts. TOON declares array shapes once (`[N]` count + `{field1,field2,...}` column list) and uses indentation instead of braces, so tabular payloads (MT5 rate bars, indicator values, transaction history) use 20–40 % fewer tokens than compact JSON.
+> **Status:** the shape-detection heuristic and the `format_response()`
+> entry point ship in this release, but the upstream
+> `toon-format/toon-python` encoder has no PyPI wheel, so PyPI rejects
+> our `Requires-Dist: toon_format @ https://...` reference. The
+> heuristic silently falls back to JSON until the encoder is vendored
+> (tracked for v0.6.4). The code, tests, and savings measurement below
+> are the design target.
+
+The server is designed to automatically encode tabular tool responses in [TOON](https://github.com/toon-format/toon) — a line-oriented, indentation-based format designed for LLM contexts. TOON declares array shapes once (`[N]` count + `{field1,field2,...}` column list) and uses indentation instead of braces, so tabular payloads (MT5 rate bars, indicator values, transaction history) are 20–40 % smaller than compact JSON.
 
 **The LLM doesn't choose. The server detects the shape and applies TOON only when it helps.** There is no `output_format` or `wire_format` parameter on any tool.
 

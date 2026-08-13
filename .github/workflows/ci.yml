@@ -38,7 +38,7 @@ jobs:
       - name: Install package + dev deps (incl. TOON)
         run: |
           python -m pip install --upgrade pip
-          pip install -e .[toon,test]
+          pip install -e .[test]
       - name: Run pytest
         run: pytest -q --color=yes
 
