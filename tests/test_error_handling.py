@@ -12,8 +12,8 @@ try:
     from mt5_mcp.error_utils import (
         ErrorType,
         create_error_response,
-        safe_json_parse,
         safe_enum_conversion,
+        safe_json_parse,
         validate_required_field,
         validate_type,
     )
@@ -23,15 +23,15 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for manual execution
     if SRC_PATH not in sys.path:
         sys.path.insert(0, SRC_PATH)
 
-    from mt5_mcp.error_utils import (  # type: ignore  # noqa: E402
+    from mt5_mcp.error_utils import (  # type: ignore
         ErrorType,
         create_error_response,
-        safe_json_parse,
         safe_enum_conversion,
+        safe_json_parse,
         validate_required_field,
         validate_type,
     )
-    from mt5_mcp.models import MT5Operation  # type: ignore  # noqa: E402
+    from mt5_mcp.models import MT5Operation  # type: ignore
 
 
 def test_safe_json_parse():
@@ -110,7 +110,7 @@ def test_validate_required_field():
         error = validate_required_field(test_input, "test_field")
         success = error is None
         status = "✓" if success == should_succeed else "✗"
-        print(f"{status} Input: {str(test_input):30} Success: {success}")
+        print(f"{status} Input: {test_input!s:30} Success: {success}")
         if error:
             print(f"  Error: {error['error_type']}: {error['error'][:50]}")
 
@@ -243,7 +243,7 @@ def main():
         print("✓ Standardized error responses are generated")
 
     except Exception as e:
-        print(f"\n✗ Test suite failed with error: {str(e)}")
+        print(f"\n✗ Test suite failed with error: {e!s}")
         import traceback
 
         traceback.print_exc()

@@ -5,13 +5,12 @@ Executes Python commands in a restricted namespace and formats results.
 
 import ast
 import io
-import sys
-import traceback
-import logging
-import runpy
-from typing import Any, Dict, Tuple
-import pandas as pd
 import json
+import logging
+import sys
+from typing import Any
+
+import pandas as pd
 
 from .errors import MT5ValidationError
 
@@ -68,7 +67,7 @@ def format_result(result: Any) -> str:
     return str(result)
 
 
-def _prepare_code(command: str) -> Tuple[object, bool]:
+def _prepare_code(command: str) -> tuple[object, bool]:
     """Compile command and capture final expression if present."""
 
     try:
@@ -91,7 +90,7 @@ def _prepare_code(command: str) -> Tuple[object, bool]:
     return code_obj, capture_expression
 
 
-def execute_command(command: str, namespace: Dict[str, Any], show_traceback: bool = True) -> str:
+def execute_command(command: str, namespace: dict[str, Any], show_traceback: bool = True) -> str:
     """
     Execute Python command in restricted namespace and return formatted result.
 
@@ -194,19 +193,11 @@ def execute_command(command: str, namespace: Dict[str, Any], show_traceback: boo
         except MT5ValidationError:
             raise
         except Exception as e:
-            logger.error(f"Failed to prepare code: {e}", exc_info=True)
-            raise MT5ValidationError(f"Failed to compile command: {str(e)}") from e
+            logger.exception(f"Failed to prepare code: {e}")
+            raise MT5ValidationError(f"Failed to compile command: {e!s}") from e
         namespace.setdefault("__name__", "__main__")
         namespace.pop("__mt5_exec_result", None)
-        runpy._run_code(
-            code_obj,
-            namespace,
-            None,
-            "mt5_exec",
-            None,
-            None,
-            None,
-        )
+        exec(code_obj, namespace)  # noqa: S102  (intentional — see executor docstring)
         if capture_expression:
             result = namespace.get("__mt5_exec_result")
         if result is None:
@@ -217,7 +208,7 @@ def execute_command(command: str, namespace: Dict[str, Any], show_traceback: boo
                     break
     except Exception as e:
         error = e
-        logger.error(f"Command execution failed: {str(e)}", exc_info=True)
+        logger.exception(f"Command execution failed: {e!s}")
     finally:
         # Restore stdout
         sys.stdout = old_stdout
@@ -226,9 +217,11 @@ def execute_command(command: str, namespace: Dict[str, Any], show_traceback: boo
     # Build response
     if error:
         if show_traceback:
-            tb = traceback.format_exc()
-            return f"Error executing command:\n\n{tb}"
-        return f"Error: {type(error).__name__}: {str(error)}"
+            return (
+                f"Error executing command:\n\n"
+                f"{type(error).__name__}: {error}"
+            )
+        return f"Error: {type(error).__name__}: {error!s}"
 
     # Combine output and result
     response_parts = []
@@ -242,8 +235,8 @@ def execute_command(command: str, namespace: Dict[str, Any], show_traceback: boo
             if formatted_result:
                 response_parts.append(formatted_result)
         except Exception as e:
-            logger.error(f"Failed to format result: {e}", exc_info=True)
-            response_parts.append(f"Warning: Could not format result: {str(e)}")
+            logger.exception(f"Failed to format result: {e}")
+            response_parts.append(f"Warning: Could not format result: {e!s}")
             response_parts.append(f"Raw result type: {type(result).__name__}")
 
     if not response_parts:

@@ -1,11 +1,12 @@
 """Validators for MT5 operations and parameters."""
 
-import MetaTrader5 as mt5
+import difflib
 import inspect
 import logging
-from typing import Tuple, Optional, Dict, Any, List
 from functools import lru_cache
-import difflib
+from typing import Any
+
+import MetaTrader5 as mt5
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 
-def get_symbol_info_cached(symbol: str) -> Optional[Any]:
+def get_symbol_info_cached(symbol: str) -> Any | None:
     """Get symbol info with caching (doesn't cache None to avoid stale failures)."""
     # Check if already in cache
     cache_key = symbol
@@ -36,7 +37,7 @@ def get_symbol_info_cached(symbol: str) -> Optional[Any]:
 
 
 @lru_cache(maxsize=32)
-def get_all_symbols_cached() -> List[str]:
+def get_all_symbols_cached() -> list[str]:
     """Get all symbol names with caching."""
     symbols = mt5.symbols_get()
     if symbols:
@@ -58,7 +59,7 @@ def clear_symbol_cache():
 
 def validate_symbol(
     symbol: str,
-) -> Tuple[bool, Optional[str], Optional[Dict[str, Any]]]:
+) -> tuple[bool, str | None, dict[str, Any] | None]:
     """
     Validate symbol exists in MT5 and auto-select it in Market Watch.
 
@@ -75,13 +76,16 @@ def validate_symbol(
     # First, try to select/enable the symbol in Market Watch
     # This is required for symbols not currently visible in Market Watch
     try:
-        select_result = mt5.symbol_select(symbol, True)
-        if select_result:
+        if mt5.symbol_select(symbol, True) and hasattr(
+            get_symbol_info_cached, "_cache"
+        ):
             # Clear cache since we just enabled a new symbol
-            if hasattr(get_symbol_info_cached, "_cache"):
-                get_symbol_info_cached._cache.pop(symbol, None)
+            get_symbol_info_cached._cache.pop(symbol, None)
     except Exception:
-        pass  # Continue even if select fails - symbol_info will catch actual errors
+        # Symbol-select failures are not fatal here — the downstream
+        # symbol_info call will surface the real error if the symbol
+        # truly isn't available.
+        logger.debug("mt5.symbol_select(%r) failed; continuing", symbol)
 
     # Check if symbol exists
     symbol_info = get_symbol_info_cached(symbol)
@@ -113,7 +117,7 @@ def validate_symbol(
 
 
 @lru_cache(maxsize=64)
-def get_function_signature(operation_name: str) -> Optional[inspect.Signature]:
+def get_function_signature(operation_name: str) -> inspect.Signature | None:
     """Get MT5 function signature with caching."""
     try:
         func = getattr(mt5, operation_name, None)
@@ -125,8 +129,8 @@ def get_function_signature(operation_name: str) -> Optional[inspect.Signature]:
 
 
 def validate_operation_parameters(
-    operation_name: str, provided_params: Dict[str, Any]
-) -> Tuple[bool, Optional[str], Optional[Dict[str, Any]]]:
+    operation_name: str, provided_params: dict[str, Any]
+) -> tuple[bool, str | None, dict[str, Any] | None]:
     """
     Validate parameters for MT5 operation.
 
@@ -232,7 +236,7 @@ def convert_order_type(order_type_str: str) -> int:
 # ============================================================================
 
 
-def validate_and_adjust_volume(symbol: str, volume: float) -> Tuple[float, Optional[str]]:
+def validate_and_adjust_volume(symbol: str, volume: float) -> tuple[float, str | None]:
     """
     Validate and adjust volume to symbol constraints.
 
@@ -274,7 +278,7 @@ def validate_and_adjust_volume(symbol: str, volume: float) -> Tuple[float, Optio
 
 def validate_indicator_data_requirements(
     indicator_function: str, period: int, bar_count: int
-) -> Tuple[bool, Optional[str]]:
+) -> tuple[bool, str | None]:
     """
     Validate sufficient data for indicator calculation.
 
@@ -288,9 +292,7 @@ def validate_indicator_data_requirements(
         required = 35  # MACD typically needs 26 + buffer
     elif "bollinger" in indicator_function.lower():
         required = period + 10
-    elif "sma" in indicator_function.lower() or "ema" in indicator_function.lower():
-        required = period + 5
-    elif "atr" in indicator_function.lower():
+    elif "sma" in indicator_function.lower() or "ema" in indicator_function.lower() or "atr" in indicator_function.lower():
         required = period + 5
     else:
         required = max(50, period + 10)  # Conservative default
@@ -310,7 +312,7 @@ def validate_indicator_data_requirements(
 # ============================================================================
 
 
-def validate_ta_function(function_path: str) -> Tuple[bool, Optional[str]]:
+def validate_ta_function(function_path: str) -> tuple[bool, str | None]:
     """
     Validate TA-Lib function path.
 
@@ -347,4 +349,4 @@ def validate_ta_function(function_path: str) -> Tuple[bool, Optional[str]]:
         return True, None
 
     except Exception as e:
-        return False, f"Error validating TA function: {str(e)}"
+        return False, f"Error validating TA function: {e!s}"

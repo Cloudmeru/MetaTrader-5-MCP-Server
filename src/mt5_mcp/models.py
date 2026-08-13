@@ -1,8 +1,9 @@
 """Pydantic models for universal MT5 operations."""
 
 from enum import Enum
-from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field, field_validator
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class MT5Operation(str, Enum):
@@ -68,28 +69,28 @@ class MT5QueryRequest(BaseModel):
 
     operation: MT5Operation = Field(..., description="MT5 operation to execute")
 
-    symbol: Optional[str] = Field(
+    symbol: str | None = Field(
         None,
         description="Trading symbol (required for symbol-specific operations)",
         min_length=3,
         max_length=20,
     )
 
-    parameters: Dict[str, Any] = Field(
+    parameters: dict[str, Any] = Field(
         default_factory=dict,
         description="Operation-specific parameters (e.g., timeframe, count, start_pos, dates)",
     )
 
     @field_validator("symbol")
     @classmethod
-    def validate_symbol(cls, v: Optional[str]) -> Optional[str]:
+    def validate_symbol(cls, v: str | None) -> str | None:
         """Validate and normalize symbol."""
         if v:
             return v.strip().upper()
         return v
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "examples": [
                 {
                     "operation": "copy_rates_from_pos",
@@ -100,6 +101,7 @@ class MT5QueryRequest(BaseModel):
                 {"operation": "symbols_get", "parameters": {"group": "*USD*"}},
             ]
         }
+    )
 
 
 class IndicatorSpec(BaseModel):
@@ -111,17 +113,17 @@ class IndicatorSpec(BaseModel):
         pattern=r"^ta\.\w+\.\w+$",
     )
 
-    column_name: Optional[str] = Field(
+    column_name: str | None = Field(
         None, description="Output column name (auto-generated if not provided)"
     )
 
-    params: Dict[str, Any] = Field(
+    params: dict[str, Any] = Field(
         default_factory=dict,
         description="Indicator parameters (e.g., {'window': 14} for RSI)",
     )
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "examples": [
                 {"function": "ta.momentum.rsi", "params": {"window": 14}},
                 {"function": "ta.trend.sma_indicator", "params": {"window": 20}},
@@ -130,22 +132,23 @@ class IndicatorSpec(BaseModel):
                 {"function": "ta.trend.macd", "params": {}},
             ]
         }
+    )
 
 
 class ChartPanel(BaseModel):
     """Configuration for a chart panel."""
 
-    columns: List[str] = Field(..., description="Column names to plot in this panel", min_length=1)
+    columns: list[str] = Field(..., description="Column names to plot in this panel", min_length=1)
 
     style: str = Field(default="line", description="Plot style: 'line', 'scatter', 'bar'")
 
-    y_label: Optional[str] = Field(None, description="Y-axis label")
+    y_label: str | None = Field(None, description="Y-axis label")
 
-    y_limits: Optional[List[float]] = Field(
+    y_limits: list[float] | None = Field(
         None, description="Y-axis limits [min, max]", min_length=2, max_length=2
     )
 
-    reference_lines: Optional[List[float]] = Field(
+    reference_lines: list[float] | None = Field(
         None, description="Horizontal reference lines (e.g., [30, 70] for RSI)"
     )
 
@@ -158,14 +161,14 @@ class ChartConfig(BaseModel):
         description="Chart type: 'single' (one panel) or 'multi' (multiple panels)",
     )
 
-    panels: List[ChartPanel] = Field(
+    panels: list[ChartPanel] = Field(
         default_factory=lambda: [ChartPanel(columns=["close"])],
         description="Panel configurations (one for single, multiple for multi)",
         min_length=1,
         max_length=5,
     )
 
-    title: Optional[str] = Field(None, description="Chart title (auto-generated if not provided)")
+    title: str | None = Field(None, description="Chart title (auto-generated if not provided)")
 
     filename: str = Field(
         default="chart.png", description="Output filename", pattern=r"^[\w\-]+\.png$"
@@ -190,7 +193,7 @@ class ForecastConfig(BaseModel):
         default=False, description="Include historical fitted values in forecast output"
     )
 
-    freq: Optional[str] = Field(
+    freq: str | None = Field(
         None,
         description=(
             "Forecast frequency (auto-detected from data if not specified): "
@@ -255,15 +258,15 @@ class MT5AnalysisRequest(BaseModel):
 
     query: MT5QueryRequest = Field(..., description="MT5 data query configuration")
 
-    indicators: Optional[List[IndicatorSpec]] = Field(
+    indicators: list[IndicatorSpec] | None = Field(
         None, description="Technical indicators to calculate", max_length=20
     )
 
-    chart: Optional[ChartConfig] = Field(
+    chart: ChartConfig | None = Field(
         None, description="Chart generation configuration (omit for data-only response)"
     )
 
-    forecast: Optional[ForecastConfig] = Field(
+    forecast: ForecastConfig | None = Field(
         None, description="Prophet forecast configuration (omit to skip forecasting)"
     )
 
@@ -272,7 +275,7 @@ class MT5AnalysisRequest(BaseModel):
         description="Data output format: 'markdown', 'json', 'chart_only'",
     )
 
-    tail: Optional[int] = Field(
+    tail: int | None = Field(
         None,
         description="Return only last N rows of data (None = all rows)",
         ge=1,
@@ -288,8 +291,8 @@ class MT5AnalysisRequest(BaseModel):
             raise ValueError("output_format must be 'markdown', 'json', or 'chart_only'")
         return v
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "examples": [
                 {
                     "query": {
@@ -321,6 +324,7 @@ class MT5AnalysisRequest(BaseModel):
                 }
             ]
         }
+    )
 
 
 # ============================================================================
@@ -334,18 +338,18 @@ class MT5QueryResponse(BaseModel):
     operation: str
     success: bool
     data: Any
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class MT5AnalysisResponse(BaseModel):
     """Universal analysis response."""
 
     success: bool
-    data: Optional[Any] = None
-    chart_path: Optional[str] = None
-    forecast_chart_path: Optional[str] = None
-    indicators_calculated: List[str] = Field(default_factory=list)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    data: Any | None = None
+    chart_path: str | None = None
+    forecast_chart_path: str | None = None
+    indicators_calculated: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ErrorResponse(BaseModel):
@@ -353,6 +357,6 @@ class ErrorResponse(BaseModel):
 
     error: str
     error_type: str
-    suggestion: Optional[str] = None
-    corrected_params: Optional[Dict[str, Any]] = None
-    example: Optional[Dict[str, Any]] = None
+    suggestion: str | None = None
+    corrected_params: dict[str, Any] | None = None
+    example: dict[str, Any] | None = None
