@@ -13,7 +13,7 @@ Comprehensive instructions for installing, configuring, and operating the MT5 MC
    cd C:\Git\MT5-MCP
    pip install -e .
    ```
-   Need the HTTP transport? Install the optional extras: `pip install -e .[ui]` (or `pip install "mt5-mcp[ui]"` from PyPI).
+   Need the HTTP transport? Just run `python -m mt5_mcp --transport http` — no extras required.
    
    **Package naming:** Install with `mt5-mcp` (hyphen), import/run as `mt5_mcp` (underscore).
 3. **Register the server with Claude Desktop** (`%APPDATA%\Claude\claude_desktop_config.json`).
@@ -69,15 +69,14 @@ Add `--rate-limit <value>` when using HTTP to tune per-IP request budgets (set t
 
 ### HTTP MCP Server Quick Start
 
-1. Install the extras: `pip install "mt5-mcp[ui]"`.
-2. Launch HTTP mode: `python -m mt5_mcp --transport http --host 0.0.0.0 --port 7860 --rate-limit 10` (or `mt5-mcp --transport http`).
-3. Point any MCP client to `http://<host>:7860/gradio_api/mcp/`:
+1. Launch HTTP mode: `python -m mt5_mcp --transport http --host 0.0.0.0 --port 8000 --rate-limit 10` (or `mt5-mcp --transport http`).
+2. Point any MCP client to `http://<host>:8000/mcp`:
 
 ```json
 {
   "mcpServers": {
     "mt5-http": {
-      "url": "http://localhost:7860/gradio_api/mcp/"
+      "url": "http://localhost:8000/mcp/"
     }
   }
 }
@@ -101,7 +100,7 @@ mt5-mcp --transport both --host 0.0.0.0 --port 7860 --rate-limit 20
 
 - **Local stdio (default):** `python -m mt5_mcp` or `mt5-mcp`
 - **Local HTTP:** `python -m mt5_mcp --transport http --port 7860` or `mt5-mcp --transport http --port 7860`
-- **Windows VPS / HF Spaces:** install `"mt5-mcp[ui]"`, run HTTP mode, and place the MT5 terminal on the same machine (MT5 remains Windows-only).
+- **Windows VPS / HF Spaces:** install `mt5-mcp`, run `--transport http` (or `--transport all`), and place the MT5 terminal on the same machine (MT5 remains Windows-only).
 
 ## 2. Namespace Reference
 

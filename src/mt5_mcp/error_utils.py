@@ -6,9 +6,9 @@ server crashes from malformed client input.
 
 import json
 import logging
-from datetime import datetime
-from typing import Any, Dict, Optional
+from datetime import datetime, timezone
 from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -27,15 +27,16 @@ class ErrorType(str, Enum):
     CALCULATION_ERROR = "CalculationError"
     TIMEOUT_ERROR = "TimeoutError"
     RUNTIME_ERROR = "RuntimeError"
+    OPERATION_ERROR = "OperationError"
     UNKNOWN_ERROR = "UnknownError"
 
 
 def create_error_response(
     error_type: ErrorType,
     error_message: str,
-    operation: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    operation: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Create standardized error response dictionary.
 
@@ -52,7 +53,7 @@ def create_error_response(
         "success": False,
         "error": error_message,
         "error_type": error_type.value,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
     if operation:
@@ -66,9 +67,9 @@ def create_error_response(
 
 def create_success_response(
     data: Any,
-    operation: Optional[str] = None,
-    metadata: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    operation: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Create standardized success response dictionary.
 
@@ -83,7 +84,7 @@ def create_success_response(
     response = {
         "success": True,
         "data": data,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
     if operation:
@@ -99,7 +100,7 @@ def safe_json_parse(
     json_string: str,
     field_name: str = "input",
     default: Any = None,
-) -> tuple[Optional[Any], Optional[Dict[str, Any]]]:
+) -> tuple[Any | None, dict[str, Any] | None]:
     """
     Safely parse JSON string with error handling.
 
@@ -119,7 +120,7 @@ def safe_json_parse(
         parsed = json.loads(json_string)
         return parsed, None
     except json.JSONDecodeError as e:
-        error_msg = f"Invalid JSON in {field_name}: {str(e)}"
+        error_msg = f"Invalid JSON in {field_name}: {e!s}"
         logger.warning(error_msg)
         error_dict = create_error_response(
             ErrorType.JSON_PARSE_ERROR,
@@ -132,8 +133,8 @@ def safe_json_parse(
         )
         return default, error_dict
     except Exception as e:
-        error_msg = f"Unexpected error parsing {field_name}: {str(e)}"
-        logger.error(error_msg, exc_info=True)
+        error_msg = f"Unexpected error parsing {field_name}: {e!s}"
+        logger.exception(error_msg)
         error_dict = create_error_response(
             ErrorType.UNKNOWN_ERROR, error_msg, details={"field": field_name}
         )
@@ -144,7 +145,7 @@ def safe_enum_conversion(
     value: str,
     enum_class: type[Enum],
     field_name: str = "field",
-) -> tuple[Optional[Enum], Optional[Dict[str, Any]]]:
+) -> tuple[Enum | None, dict[str, Any] | None]:
     """
     Safely convert string to enum with error handling.
 
@@ -175,8 +176,8 @@ def safe_enum_conversion(
         )
         return None, error_dict
     except Exception as e:
-        error_msg = f"Unexpected error converting {field_name}: {str(e)}"
-        logger.error(error_msg, exc_info=True)
+        error_msg = f"Unexpected error converting {field_name}: {e!s}"
+        logger.exception(error_msg)
         error_dict = create_error_response(
             ErrorType.UNKNOWN_ERROR, error_msg, details={"field": field_name}
         )
@@ -186,7 +187,7 @@ def safe_enum_conversion(
 def validate_required_field(
     value: Any,
     field_name: str,
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """
     Validate that a required field has a value.
 
@@ -210,7 +211,7 @@ def validate_type(
     value: Any,
     expected_type: type,
     field_name: str,
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """
     Validate that a value has the expected type.
 
@@ -241,11 +242,11 @@ def validate_type(
 
 
 def safe_dict_get(
-    dictionary: Dict[str, Any],
+    dictionary: dict[str, Any],
     key: str,
     default: Any = None,
-    expected_type: Optional[type] = None,
-) -> tuple[Any, Optional[Dict[str, Any]]]:
+    expected_type: type | None = None,
+) -> tuple[Any, dict[str, Any] | None]:
     """
     Safely get value from dictionary with type validation.
 
@@ -280,8 +281,8 @@ def wrap_with_error_handling(func):
             return func(*args, **kwargs)
         except Exception as e:
             func_name = func.__name__
-            error_msg = f"Error in {func_name}: {str(e)}"
-            logger.error(error_msg, exc_info=True)
+            error_msg = f"Error in {func_name}: {e!s}"
+            logger.exception(error_msg)
 
             # Determine error type
             if "json" in str(e).lower():
@@ -313,9 +314,9 @@ def wrap_with_error_handling(func):
 def safe_operation_execution(
     operation_func,
     operation_name: str,
-    error_type_map: Optional[Dict[type, ErrorType]] = None,
+    error_type_map: dict[type, ErrorType] | None = None,
     **kwargs,
-) -> tuple[Any, Optional[Dict[str, Any]]]:
+) -> tuple[Any, dict[str, Any] | None]:
     """
     Execute an operation with comprehensive error handling.
 
@@ -338,8 +339,8 @@ def safe_operation_execution(
         # Map exception to error type
         error_type = error_type_map.get(type(e), ErrorType.RUNTIME_ERROR)
 
-        error_msg = f"Operation '{operation_name}' failed: {str(e)}"
-        logger.error(error_msg, exc_info=True)
+        error_msg = f"Operation '{operation_name}' failed: {e!s}"
+        logger.exception(error_msg)
 
         error_dict = create_error_response(
             error_type,
@@ -353,7 +354,7 @@ def safe_operation_execution(
         return None, error_dict
 
 
-def format_json_response(response_dict: Dict[str, Any]) -> str:
+def format_json_response(response_dict: dict[str, Any]) -> str:
     """
     Format response dictionary as JSON string with safe serialization.
 
@@ -366,7 +367,7 @@ def format_json_response(response_dict: Dict[str, Any]) -> str:
     try:
         return json.dumps(response_dict, default=str, indent=2)
     except Exception as e:
-        logger.error(f"Failed to serialize response: {e}", exc_info=True)
+        logger.exception(f"Failed to serialize response: {e}")
         # Return basic error response
         fallback = create_error_response(
             ErrorType.RUNTIME_ERROR,

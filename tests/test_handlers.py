@@ -2,11 +2,12 @@
 Unit tests for handlers.py - MT5 query and analysis handlers.
 """
 
-import unittest
-from unittest.mock import Mock, patch, MagicMock
 import sys
-import pandas as pd
+import unittest
+from unittest.mock import MagicMock, Mock, patch
+
 import numpy as np
+import pandas as pd
 
 # Mock MT5
 mock_mt5 = MagicMock()
@@ -28,7 +29,7 @@ class TestHandleMT5Query(unittest.TestCase):
     def test_query_symbol_info(self, mock_safe_call):
         """Test querying symbol information."""
         from mt5_mcp.handlers import handle_mt5_query
-        from mt5_mcp.models import MT5QueryRequest, MT5Operation
+        from mt5_mcp.models import MT5Operation, MT5QueryRequest
 
         # Mock symbol info response
         mock_symbol_info = Mock()
@@ -55,7 +56,7 @@ class TestHandleMT5Query(unittest.TestCase):
     def test_query_copy_rates(self, mock_safe_call):
         """Test querying historical rates."""
         from mt5_mcp.handlers import handle_mt5_query
-        from mt5_mcp.models import MT5QueryRequest, MT5Operation
+        from mt5_mcp.models import MT5Operation, MT5QueryRequest
 
         # Mock rates data
         mock_rates = np.array(
@@ -94,7 +95,7 @@ class TestHandleMT5Query(unittest.TestCase):
     def test_query_account_info(self, mock_safe_call):
         """Test querying account information."""
         from mt5_mcp.handlers import handle_mt5_query
-        from mt5_mcp.models import MT5QueryRequest, MT5Operation
+        from mt5_mcp.models import MT5Operation, MT5QueryRequest
 
         # Mock account info
         mock_account = Mock()
@@ -125,8 +126,8 @@ class TestHandleMT5Analysis(unittest.TestCase):
         from mt5_mcp.handlers import handle_mt5_analysis
         from mt5_mcp.models import (
             MT5AnalysisRequest,
-            MT5QueryRequest,
             MT5Operation,
+            MT5QueryRequest,
             MT5QueryResponse,
         )
 
@@ -168,11 +169,11 @@ class TestHandleMT5Analysis(unittest.TestCase):
         """Test analysis with technical indicators."""
         from mt5_mcp.handlers import handle_mt5_analysis
         from mt5_mcp.models import (
-            MT5AnalysisRequest,
-            MT5QueryRequest,
-            MT5Operation,
-            MT5QueryResponse,
             IndicatorSpec,
+            MT5AnalysisRequest,
+            MT5Operation,
+            MT5QueryRequest,
+            MT5QueryResponse,
         )
 
         # Mock query response
@@ -224,7 +225,7 @@ class TestAnalysisSummary(unittest.TestCase):
         # Create sample data
         df = pd.DataFrame(
             {
-                "time": pd.date_range("2024-01-01", periods=100, freq="H"),
+                "time": pd.date_range("2024-01-01", periods=100, freq="h"),
                 "close": np.linspace(50000, 55000, 100),
                 "high": np.linspace(50100, 55100, 100),
                 "low": np.linspace(49900, 54900, 100),

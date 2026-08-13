@@ -1,9 +1,31 @@
 """MT5 connection management and safe namespace setup."""
 
 import logging
+import platform
+import sys
 import threading
-from typing import Dict, Any, Optional
-import MetaTrader5 as mt5
+from typing import Any
+
+# Use the import system rather than a hard ``import`` so tests can pre-stub
+# ``MetaTrader5`` in ``sys.modules`` (see ``tests/conftest.py``). If we
+# get here without a stub, the import will fail on non-Windows hosts —
+# MetaTrader5 only ships Windows wheels. Surface a clear, actionable
+# message instead of a confusing ModuleNotFoundError.
+if "MetaTrader5" not in sys.modules:
+    try:
+        import MetaTrader5 as mt5
+    except ImportError as exc:
+        if platform.system() != "Windows":
+            raise ImportError(
+                "mt5_mcp is only supported on Windows. MetaTrader5 is a "
+                "Windows-only library; the MCP server itself will start on "
+                "any platform but every tool call requires a Windows host "
+                "with the MT5 terminal installed. "
+                f"Detected platform: {platform.system()} ({sys.platform})."
+            ) from exc
+        raise
+else:
+    import MetaTrader5 as mt5
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +61,7 @@ class MT5Connection:
     def __init__(self):
         """Initialize MT5 connection at startup."""
         self._initialized = False
-        self._safe_namespace: Optional[Dict[str, Any]] = None
+        self._safe_namespace: dict[str, Any] | None = None
         self._initialize()
 
     def _initialize(self, max_retries=3, retry_delay=1.0):
@@ -79,30 +101,31 @@ class MT5Connection:
             except RuntimeError:
                 raise
             except Exception as e:
-                last_error = f"Unexpected error during MT5 initialization: {str(e)}"
-                logger.error(last_error, exc_info=True)
+                last_error = f"Unexpected error during MT5 initialization: {e!s}"
+                logger.exception(last_error)
 
                 if attempt < max_retries - 1:
                     time.sleep(retry_delay)
                     continue
 
                 raise RuntimeError(
-                    "Failed to initialize MT5 after " f"{max_retries} attempts: {str(e)}"
+                    "Failed to initialize MT5 after " f"{max_retries} attempts: {e!s}"
                 ) from e
 
         # Build safe namespace with read-only functions
         try:
             self._safe_namespace = self._build_safe_namespace()
-        except Exception as e:
-            logger.error(f"Failed to build safe namespace: {e}", exc_info=True)
-            raise RuntimeError(f"Failed to build execution namespace: {str(e)}") from e
+        except Exception:
+            logger.exception("Failed to build safe namespace")
+            raise RuntimeError("Failed to build execution namespace")
 
-    def _build_safe_namespace(self) -> Dict[str, Any]:
+    def _build_safe_namespace(self) -> dict[str, Any]:
         """Build namespace with only read-only MT5 functions and helpers."""
         import datetime
-        import pandas as pd
-        import numpy as np
+
         import matplotlib
+        import numpy as np
+        import pandas as pd
 
         matplotlib.use("Agg")  # Non-interactive backend for server use
         import matplotlib.pyplot as plt
@@ -219,7 +242,7 @@ class MT5Connection:
 
         return True
 
-    def get_safe_namespace(self) -> Dict[str, Any]:
+    def get_safe_namespace(self) -> dict[str, Any]:
         """Get the safe execution namespace."""
         if not self.validate_connection():
             raise RuntimeError("MT5 connection is not active. Ensure MT5 terminal is running.")
@@ -236,7 +259,7 @@ class MT5Connection:
 
 
 # Global connection instance
-_connection: Optional[MT5Connection] = None
+_connection: MT5Connection | None = None
 
 
 def get_connection() -> MT5Connection:
@@ -255,12 +278,12 @@ def shutdown_connection():
         _connection = None
 
 
-def get_safe_namespace() -> Dict[str, Any]:
+def get_safe_namespace() -> dict[str, Any]:
     """Get the safe execution namespace (convenience function)."""
     return get_connection().get_safe_namespace()
 
 
-def validate_connection() -> Dict[str, Any]:
+def validate_connection() -> dict[str, Any]:
     """
     Validate MT5 connection and return status.
 
@@ -275,5 +298,5 @@ def validate_connection() -> Dict[str, Any]:
             "error": None if is_connected else "Connection validation failed",
         }
     except Exception as e:
-        logger.error(f"Connection validation error: {str(e)}")
+        logger.error(f"Connection validation error: {e!s}")
         return {"connected": False, "error": str(e)}

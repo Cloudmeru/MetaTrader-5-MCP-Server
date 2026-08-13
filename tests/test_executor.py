@@ -2,8 +2,8 @@
 Unit tests for executor.py - Python code execution.
 """
 
-import unittest
 import sys
+import unittest
 from unittest.mock import MagicMock
 
 mock_mt5 = MagicMock()
@@ -87,8 +87,9 @@ result = total
 
     def test_execute_with_pandas(self):
         """Test execution with pandas operations."""
-        from mt5_mcp.executor import execute_command
         import pandas as pd
+
+        from mt5_mcp.executor import execute_command
 
         self.namespace["pd"] = pd
 
@@ -138,8 +139,9 @@ class TestFormatResult(unittest.TestCase):
 
     def test_format_dataframe(self):
         """Test formatting pandas DataFrame."""
-        from mt5_mcp.executor import format_result
         import pandas as pd
+
+        from mt5_mcp.executor import format_result
 
         df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
         result = format_result(df)

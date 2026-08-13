@@ -33,6 +33,13 @@ ENV/
 *.swo
 *~
 
+# Tool caches
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
 # Logs
 *.log
 
@@ -42,3 +49,10 @@ Thumbs.db
 
 # Generated artifacts
 *.png
+
+# Local wheel build outputs
+_build_test/
+dist/
+
+# Personal scratch notes
+IDEA.md

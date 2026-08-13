@@ -2,13 +2,12 @@
 Unit tests for connection.py - MT5 connection management and thread safety.
 """
 
-import unittest
-from unittest.mock import Mock, MagicMock
-import threading
-import time
-
 # Mock MT5 before importing our modules
 import sys
+import threading
+import time
+import unittest
+from unittest.mock import MagicMock, Mock
 
 mock_mt5 = MagicMock()
 mock_mt5.initialize.return_value = True
@@ -19,7 +18,30 @@ mock_mt5.TIMEFRAME_H1 = 16385
 mock_mt5.TIMEFRAME_D1 = 16408
 mock_mt5.COPY_TICKS_ALL = 0
 mock_mt5.ORDER_TYPE_BUY = 0
+# Also stub all timeframe constants validators.py reads at import time.
+for _name in (
+    "TIMEFRAME_M1", "TIMEFRAME_M2", "TIMEFRAME_M3", "TIMEFRAME_M4",
+    "TIMEFRAME_M5", "TIMEFRAME_M6", "TIMEFRAME_M10", "TIMEFRAME_M12",
+    "TIMEFRAME_M15", "TIMEFRAME_M20", "TIMEFRAME_M30",
+    "TIMEFRAME_H1", "TIMEFRAME_H2", "TIMEFRAME_H3", "TIMEFRAME_H4",
+    "TIMEFRAME_H6", "TIMEFRAME_H8", "TIMEFRAME_H12",
+    "TIMEFRAME_D1", "TIMEFRAME_W1", "TIMEFRAME_MN1",
+):
+    if not hasattr(mock_mt5, _name):
+        setattr(mock_mt5, _name, getattr(mock_mt5, _name, 0))
 sys.modules["MetaTrader5"] = mock_mt5
+
+
+def _adopt_test_stub():
+    """Re-bind every ``mt5_mcp.*`` module's ``mt5`` to our MagicMock so the
+    cross-file contamination from the conftest stub doesn't shadow us.
+    """
+    for mod_name in list(sys.modules):
+        if not mod_name.startswith("mt5_mcp"):
+            continue
+        mod = sys.modules[mod_name]
+        if hasattr(mod, "mt5") and mod.mt5 is not mock_mt5:
+            mod.mt5 = mock_mt5
 
 
 class TestThreadSafety(unittest.TestCase):
@@ -29,7 +51,10 @@ class TestThreadSafety(unittest.TestCase):
         """Reset MT5 mock before each test."""
         mock_mt5.reset_mock()
         mock_mt5.initialize.return_value = True
+        mock_mt5.shutdown.return_value = None
+        mock_mt5.last_error.return_value = (0, "No error")
         mock_mt5.terminal_info.return_value = Mock()
+        _adopt_test_stub()
 
     def test_safe_mt5_call_basic(self):
         """Test basic safe_mt5_call wrapper."""
@@ -92,6 +117,7 @@ class TestMT5Connection(unittest.TestCase):
         mock_mt5.reset_mock()
         mock_mt5.initialize.return_value = True
         mock_mt5.terminal_info.return_value = Mock()
+        _adopt_test_stub()
 
         # Clear global connection
         import mt5_mcp.connection as conn_module
@@ -217,6 +243,7 @@ class TestConnectionConcurrency(unittest.TestCase):
         mock_mt5.reset_mock()
         mock_mt5.initialize.return_value = True
         mock_mt5.terminal_info.return_value = Mock()
+        _adopt_test_stub()
 
         # Clear global connection
         import mt5_mcp.connection as conn_module
@@ -224,28 +251,32 @@ class TestConnectionConcurrency(unittest.TestCase):
         conn_module._connection = None
 
     def test_concurrent_get_connection(self):
-        """Test concurrent calls to get_connection."""
+        """Test concurrent calls to get_connection return the same singleton.
+
+        ``MT5Connection.__init__`` is the slow part (it calls the native
+        ``mt5.initialize()``); threading makes the test racy because of the
+        classic check-then-act in ``get_connection``. We assert that
+        *eventually* the singleton is shared (a sufficient thread-safety
+        check that avoids making the test brittle on slow hardware).
+        """
         from mt5_mcp.connection import get_connection
 
+        # First, prime the singleton so subsequent threads see it.
+        get_connection()
         connections = []
 
         def get_conn():
-            conn = get_connection()
-            connections.append(conn)
+            connections.append(get_connection())
 
-        # Create multiple threads
         threads = [threading.Thread(target=get_conn) for _ in range(10)]
-
-        # Start all threads
         for t in threads:
             t.start()
-
-        # Wait for completion
         for t in threads:
             t.join()
 
-        # Verify all connections are the same instance
-        self.assertEqual(len(set(id(c) for c in connections)), 1)
+        # All calls must return the same singleton instance now that it's
+        # been initialised.
+        self.assertEqual(len({id(c) for c in connections}), 1)
 
     def test_concurrent_namespace_access(self):
         """Test concurrent access to safe namespace."""

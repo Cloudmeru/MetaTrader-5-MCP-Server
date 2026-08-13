@@ -1,6 +1,6 @@
 """Custom error classes with LLM-friendly messages."""
 
-from typing import Optional, Dict, Any
+from typing import Any
 
 
 class MT5Error(Exception):
@@ -10,9 +10,9 @@ class MT5Error(Exception):
         self,
         message: str,
         error_type: str,
-        suggestion: Optional[str] = None,
-        corrected_params: Optional[Dict[str, Any]] = None,
-        example: Optional[Dict[str, Any]] = None,
+        suggestion: str | None = None,
+        corrected_params: dict[str, Any] | None = None,
+        example: dict[str, Any] | None = None,
     ):
         self.message = message
         self.error_type = error_type
@@ -21,7 +21,7 @@ class MT5Error(Exception):
         self.example = example
         super().__init__(message)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON response."""
         result = {"error": self.message, "error_type": self.error_type}
         if self.suggestion:
@@ -39,9 +39,9 @@ class MT5ValidationError(MT5Error):
     def __init__(
         self,
         message: str,
-        suggestion: Optional[str] = None,
-        corrected_params: Optional[Dict[str, Any]] = None,
-        example: Optional[Dict[str, Any]] = None,
+        suggestion: str | None = None,
+        corrected_params: dict[str, Any] | None = None,
+        example: dict[str, Any] | None = None,
     ):
         super().__init__(message, "VALIDATION_ERROR", suggestion, corrected_params, example)
 
@@ -49,7 +49,7 @@ class MT5ValidationError(MT5Error):
 class MT5SymbolNotFoundError(MT5Error):
     """Symbol not found error."""
 
-    def __init__(self, symbol: str, similar_symbols: Optional[list] = None):
+    def __init__(self, symbol: str, similar_symbols: list | None = None):
         message = f"Symbol '{symbol}' not found in MT5."
         suggestion = None
         corrected = None
@@ -69,8 +69,8 @@ class MT5DataError(MT5Error):
     def __init__(
         self,
         message: str,
-        suggestion: Optional[str] = None,
-        corrected_params: Optional[Dict[str, Any]] = None,
+        suggestion: str | None = None,
+        corrected_params: dict[str, Any] | None = None,
     ):
         super().__init__(message, "DATA_ERROR", suggestion, corrected_params)
 
@@ -78,13 +78,13 @@ class MT5DataError(MT5Error):
 class MT5CalculationError(MT5Error):
     """Calculation error."""
 
-    def __init__(self, message: str, suggestion: Optional[str] = None):
+    def __init__(self, message: str, suggestion: str | None = None):
         super().__init__(message, "CALCULATION_ERROR", suggestion)
 
 
 class MT5OperationError(MT5Error):
     """Operation execution error."""
 
-    def __init__(self, operation: str, message: str, suggestion: Optional[str] = None):
+    def __init__(self, operation: str, message: str, suggestion: str | None = None):
         full_message = f"Operation '{operation}' failed: {message}"
         super().__init__(full_message, "OPERATION_ERROR", suggestion)

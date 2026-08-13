@@ -1,37 +1,44 @@
 """Handlers for universal MT5 operations."""
 
-import os
-import MetaTrader5 as mt5
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import ta
+import itertools
 import logging
-from typing import Any, Callable, Dict, List, Optional, Tuple
+import os
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 from urllib.parse import quote
 
+import matplotlib.pyplot as plt
+import MetaTrader5 as mt5
+import numpy as np
+import pandas as pd
+import ta
+
+# Imported at module level (not lazy) so unit tests can ``@patch`` it via
+# ``mt5_mcp.handlers.safe_mt5_call`` and so the connection module is wired
+# in even before any handler runs.
+from .connection import safe_mt5_call
+from .errors import (
+    MT5CalculationError,
+    MT5DataError,
+    MT5OperationError,
+    MT5SymbolNotFoundError,
+    MT5ValidationError,
+)
 from .models import (
-    MT5QueryRequest,
-    MT5QueryResponse,
-    MT5AnalysisRequest,
-    MT5AnalysisResponse,
-    IndicatorSpec,
     ChartConfig,
     ForecastConfig,
-)
-from .errors import (
-    MT5ValidationError,
-    MT5SymbolNotFoundError,
-    MT5DataError,
-    MT5CalculationError,
-    MT5OperationError,
+    IndicatorSpec,
+    MT5AnalysisRequest,
+    MT5AnalysisResponse,
+    MT5QueryRequest,
+    MT5QueryResponse,
 )
 from .validators import (
-    validate_symbol,
-    convert_timeframe,
     convert_order_type,
+    convert_timeframe,
     validate_and_adjust_volume,
+    validate_symbol,
     validate_ta_function,
 )
 
@@ -96,7 +103,7 @@ OPERATION_MAP = {
 }
 
 
-def _prepare_operation_params(request: MT5QueryRequest) -> Dict[str, Any]:
+def _prepare_operation_params(request: MT5QueryRequest) -> dict[str, Any]:
     """Build and validate parameters for an MT5 operation."""
 
     # Validate request
@@ -144,11 +151,11 @@ def _prepare_operation_params(request: MT5QueryRequest) -> Dict[str, Any]:
 
 
 def _invoke_mt5_operation(
-    operation_name: str, mt5_func: Callable[..., Any], params: Dict[str, Any]
+    operation_name: str, mt5_func: Callable[..., Any], params: dict[str, Any]
 ) -> Any:
     """Execute the mapped MT5 function with validated parameters and thread safety."""
-    from .connection import safe_mt5_call
-
+    # ``safe_mt5_call`` is imported at module level from
+    # ``mt5_mcp.connection`` so unit tests can ``@patch`` it.
     logger.info("Executing %s with params: %s", operation_name, params)
 
     # Validate params is a dictionary
@@ -204,7 +211,7 @@ def _invoke_mt5_operation(
             group = params.get("group")
             result = safe_mt5_call(mt5_func, group) if group else safe_mt5_call(mt5_func)
         elif operation_name in ["order_calc_margin", "order_calc_profit"]:
-            extra_args: List[Any] = []
+            extra_args: list[Any] = []
             if "sl" in params:
                 extra_args.append(params["sl"])
             if "tp" in params:
@@ -322,8 +329,8 @@ def handle_mt5_query(request: MT5QueryRequest) -> MT5QueryResponse:
         raise
     except Exception as e:
         # Wrap unexpected errors
-        logger.error(f"Error preparing query: {e}", exc_info=True)
-        raise MT5ValidationError(f"Failed to prepare query: {str(e)}") from e
+        logger.exception(f"Error preparing query: {e}")
+        raise MT5ValidationError(f"Failed to prepare query: {e!s}") from e
     if mt5_func is None:
         raise MT5OperationError(
             operation_name,
@@ -397,9 +404,9 @@ def handle_mt5_analysis(request: MT5AnalysisRequest) -> MT5AnalysisResponse:
         raise
     except Exception as e:
         # Wrap unexpected errors
-        logger.error(f"Error in analysis setup: {e}", exc_info=True)
+        logger.exception(f"Error in analysis setup: {e}")
         raise MT5CalculationError(
-            f"Failed to initialize analysis: {str(e)}",
+            f"Failed to initialize analysis: {e!s}",
             "Check request parameters and MT5 connection",
         ) from e
     if isinstance(query_response.data, list):
@@ -416,7 +423,7 @@ def handle_mt5_analysis(request: MT5AnalysisRequest) -> MT5AnalysisResponse:
         df["time"] = pd.to_datetime(df["time"], unit="s", errors="coerce")
         df = df.sort_values("time").reset_index(drop=True)
 
-    indicators_calculated: List[str] = []
+    indicators_calculated: list[str] = []
     if request.indicators:
         for ind_spec in request.indicators:
             try:
@@ -502,8 +509,8 @@ def handle_mt5_analysis(request: MT5AnalysisRequest) -> MT5AnalysisResponse:
 
 
 def _generate_analysis_summary(
-    df: pd.DataFrame, symbol: str, indicators: List[str]
-) -> Dict[str, Any]:
+    df: pd.DataFrame, symbol: str, indicators: list[str]
+) -> dict[str, Any]:
     """Generate dynamic analysis summary based on available data patterns."""
 
     summary = {
@@ -531,7 +538,7 @@ def _generate_analysis_summary(
     return summary
 
 
-def _add_price_action_analysis(df: pd.DataFrame, summary: Dict[str, Any]) -> None:
+def _add_price_action_analysis(df: pd.DataFrame, summary: dict[str, Any]) -> None:
     """Populate price-based analytics and volatility regime details."""
     from scipy import stats
 
@@ -607,7 +614,7 @@ def _add_price_action_analysis(df: pd.DataFrame, summary: Dict[str, Any]) -> Non
         }
 
 
-def _add_oscillator_analysis(df: pd.DataFrame, summary: Dict[str, Any]) -> None:
+def _add_oscillator_analysis(df: pd.DataFrame, summary: dict[str, Any]) -> None:
     """Inspect oscillator-style columns for overbought/oversold signals."""
 
     for col in df.columns:
@@ -655,7 +662,7 @@ def _add_oscillator_analysis(df: pd.DataFrame, summary: Dict[str, Any]) -> None:
         )
 
 
-def _add_moving_average_analysis(df: pd.DataFrame, summary: Dict[str, Any]) -> List[str]:
+def _add_moving_average_analysis(df: pd.DataFrame, summary: dict[str, Any]) -> list[str]:
     """Analyze moving average columns for positioning and crossovers."""
 
     ma_indicators = [col for col in df.columns if any(kw in col.lower() for kw in MA_KEYWORDS)]
@@ -691,7 +698,7 @@ def _add_moving_average_analysis(df: pd.DataFrame, summary: Dict[str, Any]) -> L
         )
         crossovers = summary["pattern_detection"].setdefault("crossovers", [])
 
-        for fast, slow in zip(sorted_mas, sorted_mas[1:]):
+        for fast, slow in itertools.pairwise(sorted_mas):
             if fast not in df.columns or slow not in df.columns or len(df) <= 1:
                 continue
 
@@ -723,7 +730,7 @@ def _add_moving_average_analysis(df: pd.DataFrame, summary: Dict[str, Any]) -> L
     return ma_indicators
 
 
-def _add_volume_analysis(df: pd.DataFrame, summary: Dict[str, Any]) -> List[str]:
+def _add_volume_analysis(df: pd.DataFrame, summary: dict[str, Any]) -> list[str]:
     """Capture insights from available volume columns."""
 
     volume_cols = [
@@ -751,7 +758,7 @@ def _add_volume_analysis(df: pd.DataFrame, summary: Dict[str, Any]) -> List[str]
     return volume_cols
 
 
-def _add_band_analysis(df: pd.DataFrame, summary: Dict[str, Any]) -> None:
+def _add_band_analysis(df: pd.DataFrame, summary: dict[str, Any]) -> None:
     """Evaluate band/envelope indicators like Bollinger or Keltner."""
 
     band_patterns = [
@@ -803,9 +810,9 @@ def _add_band_analysis(df: pd.DataFrame, summary: Dict[str, Any]) -> None:
 
 def _add_custom_indicator_metrics(
     df: pd.DataFrame,
-    summary: Dict[str, Any],
-    volume_cols: List[str],
-    ma_indicators: List[str],
+    summary: dict[str, Any],
+    volume_cols: list[str],
+    ma_indicators: list[str],
 ) -> None:
     """Add summary metrics for columns not covered by other analyses."""
 
@@ -833,10 +840,10 @@ def _add_custom_indicator_metrics(
         )
 
 
-def _build_analysis_insights(summary: Dict[str, Any]) -> List[str]:
+def _build_analysis_insights(summary: dict[str, Any]) -> list[str]:
     """Generate a concise list of human-readable insights."""
 
-    insights: List[str] = []
+    insights: list[str] = []
 
     price_data = summary.get("data_characteristics", {}).get("price")
     if price_data:
@@ -875,7 +882,7 @@ def _build_analysis_insights(summary: Dict[str, Any]) -> List[str]:
     return insights
 
 
-def _calculate_indicator(df: pd.DataFrame, spec: IndicatorSpec) -> Tuple[pd.DataFrame, str]:
+def _calculate_indicator(df: pd.DataFrame, spec: IndicatorSpec) -> tuple[pd.DataFrame, str]:
     """Calculate technical indicator and add to DataFrame."""
 
     # Validate TA function
@@ -990,7 +997,7 @@ def _generate_chart(df: pd.DataFrame, config: ChartConfig, symbol: str, timefram
 
 def _prepare_ml_dataset(
     df: pd.DataFrame, lookback: int
-) -> Tuple[pd.DataFrame, List[str]] | Dict[str, Any]:
+) -> tuple[pd.DataFrame, list[str]] | dict[str, Any]:
     """Build feature DataFrame and feature list for ML signal inference."""
 
     required_bars = lookback + 10
@@ -1049,10 +1056,10 @@ def _prepare_ml_dataset(
 
 def _train_ml_model(
     features_df: pd.DataFrame,
-    feature_cols: List[str],
+    feature_cols: list[str],
     xgb_module,
     scaler_cls,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Train XGBoost model and derive trading signal insights."""
 
     train_features = features_df[feature_cols].iloc[:-1].values
@@ -1109,7 +1116,7 @@ def _train_ml_model(
     }
 
 
-def _generate_ml_signal(df: pd.DataFrame, lookback: int = 50) -> Dict[str, Any]:
+def _generate_ml_signal(df: pd.DataFrame, lookback: int = 50) -> dict[str, Any]:
     """
     Generate buy/sell signal using XGBoost ML model.
 
@@ -1136,13 +1143,13 @@ def _generate_ml_signal(df: pd.DataFrame, lookback: int = 50) -> Dict[str, Any]:
         return {
             "signal": "ERROR",
             "confidence": 0.0,
-            "reasoning": f"ML prediction error: {str(e)}",
+            "reasoning": f"ML prediction error: {e!s}",
         }
 
 
 def _generate_forecast(
     df: pd.DataFrame, config: "ForecastConfig", symbol: str, timeframe: str
-) -> Tuple[Dict[str, Any], Optional[str]]:
+) -> tuple[dict[str, Any], str | None]:
     """Generate Prophet-based forecast with optional ML signal and charts."""
 
     from prophet import Prophet
@@ -1223,7 +1230,7 @@ def _summarize_forecast_results(
     config: "ForecastConfig",
     prophet_df: pd.DataFrame,
     freq: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Convert raw Prophet output into structured summary and insights."""
 
     if config.include_history:
@@ -1293,7 +1300,7 @@ def _summarize_forecast_results(
 
 
 def _add_ml_prediction_if_enabled(
-    forecast_summary: Dict[str, Any], df: pd.DataFrame, config: "ForecastConfig"
+    forecast_summary: dict[str, Any], df: pd.DataFrame, config: "ForecastConfig"
 ) -> None:
     """Append ML trading signal details to forecast summary when requested."""
 
@@ -1316,7 +1323,7 @@ def _maybe_generate_forecast_chart(
     symbol: str,
     timeframe: str,
     config: "ForecastConfig",
-) -> Optional[str]:
+) -> str | None:
     """Create forecast chart if enabled, returning file path."""
 
     if not config.plot:
@@ -1355,7 +1362,7 @@ def _maybe_generate_components_chart(
     symbol: str,
     timeframe: str,
     config: "ForecastConfig",
-    forecast_summary: Dict[str, Any],
+    forecast_summary: dict[str, Any],
 ) -> None:
     """Create forecast components chart if enabled."""
 
